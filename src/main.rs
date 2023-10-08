@@ -1,10 +1,9 @@
 #![no_std]
 #![no_main]
 
-
-use feather_m4::hal::clock::GenericClockController;
 use feather_m4::ehal::digital::v2::OutputPin;
-use feather_m4::ehal::serial::Read;
+use feather_m4::ehal::blocking::i2c::*;
+use feather_m4::hal::clock::GenericClockController;
 
 use feather_m4::hal::delay::Delay;
 use feather_m4::hal::prelude::_embedded_hal_blocking_delay_DelayMs;
@@ -18,6 +17,8 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
 //use cortex_m_rt::entry;
 use feather_m4::entry;
 use feather_m4::hal;
+use hal::pwm;
+use hal::gpio::*;
 //use hal::prelude;
 use hal::fugit::*;
 
@@ -42,13 +43,34 @@ fn main() -> ! {
 
     let pins = feather_m4::Pins::new(peripherals.PORT);
 
+    let d5: hal::gpio::Pin<PA16, AlternateE> = pins.d5.into_mode();
+
+    // feather_m4::hal::pwm::Pwm1::new(
+    //     &clocks.tc0_tc1(&clocks.gclk0()).unwrap(),
+    //     1u32.Hz(), //TODO: Figure this out
+    //     peripherals.TC1,
+    //     pinout,
+    //     &mut peripherals.MCLK
+    // );
+
+    // let d5 = pins.d5.into_readable_output();
+
     let uart = feather_m4::uart(
         &mut clocks,
-        125000u32.Hz(),//Hertz::Hz(125000),
+        125000u32.Hz(), //Hertz::Hz(125000),
         peripherals.SERCOM5,
         &mut peripherals.MCLK,
         pins.d0,
         pins.d1,
+    );
+
+    let i2c = feather_m4::i2c_master(
+        &mut clocks,
+        125000u32.Hz(), // TODO: figure out frequency
+        peripherals.SERCOM2,
+        &mut peripherals.MCLK,
+        pins.sda,
+        pins.scl,
     );
 
     // let (mut rx, _tx) = uart.split();
