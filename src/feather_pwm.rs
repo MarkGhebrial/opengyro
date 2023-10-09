@@ -3,8 +3,8 @@ use core::any::Any;
 use feather_m4::hal;
 use feather_m4::pac;
 
-use hal::gpio::*;
 use hal::clock::GenericClockController;
+use hal::gpio::*;
 
 type D5Type = Pin<PA16, AlternateG>;
 //type D5Type = AnyPin;
@@ -18,8 +18,11 @@ pub struct FeatherPwm {
 }
 
 impl FeatherPwm {
-    pub fn init(d5: impl Into<D5Type>, tc2: pac::TCC1, clocks: &mut GenericClockController) -> Self {
-
+    pub fn init(
+        d5: impl Into<D5Type>,
+        tc2: pac::TCC1,
+        clocks: &mut GenericClockController,
+    ) -> Self {
         //Tcc1Pwm::
         //let d5 = TCC1Pinout::Pa16(d5);
 
@@ -28,8 +31,6 @@ impl FeatherPwm {
 
         // Set d5's mode
         let d5: Pin<PA16, AlternateG> = d5.into();
-
-        
 
         FeatherPwm { d5, tc2 }
     }
