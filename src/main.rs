@@ -3,7 +3,6 @@
 
 mod feather_pwm;
 
-use feather_m4::ehal::blocking::i2c::*;
 use feather_m4::ehal::digital::v2::OutputPin;
 use feather_m4::ehal::Pwm;
 use feather_m4::hal::clock::GenericClockController;
@@ -20,14 +19,17 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
 //use cortex_m_rt::entry;
 use feather_m4::entry;
 use feather_m4::hal;
-use hal::gpio::*;
-use hal::pwm;
-use hal::prelude;
 use hal::fugit::RateExtU32;
+use hal::gpio::*;
+use hal::prelude;
+use hal::pwm;
 
-use feather_m4::pac::NVIC;
-use feather_m4::pac::interrupt;
+use heapless::String;
+
 use cortex_m::interrupt::free as disable_interrupts;
+use cortex_m_rt::exception;
+use feather_m4::pac::interrupt;
+use feather_m4::pac::NVIC;
 
 use hal::usb::UsbBus;
 use usb_device::bus::UsbBusAllocator;
@@ -54,7 +56,6 @@ fn main() -> ! {
     let mut delay = Delay::new(core_peripherals.SYST, &mut clocks);
 
     let pins = feather_m4::Pins::new(peripherals.PORT);
-
 
     /////////// SETUP USB ///////////
     let bus_allocator = unsafe {
@@ -107,22 +108,32 @@ fn main() -> ! {
     }
 
     let gclk1 = &clocks.gclk1();
-    let _gclk0 = &clocks.gclk0();
+    let gclk0 = &clocks.gclk0();
 
     // Configure the digital pins for PWM
-    hal::pwm::TCC1Pinout::Pa16(pins.d5);
-    hal::pwm::TCC1Pinout::Pa18(pins.d6);
-    hal::pwm::TCC1Pinout::Pa19(pins.d9);
-    hal::pwm::TCC1Pinout::Pa20(pins.d10);
-    hal::pwm::TCC1Pinout::Pa21(pins.d11);
-    hal::pwm::TCC1Pinout::Pa22(pins.d12);
-    let tcc1pinout = hal::pwm::TCC1Pinout::Pa23(d13);
+    let tcc1pinout = hal::pwm::TCC1Pinout::Pa16(pins.d5);
+    // hal::pwm::TCC1Pinout::Pa18(pins.d6);
+    // hal::pwm::TCC1Pinout::Pa19(pins.d9);
+    // hal::pwm::TCC1Pinout::Pa20(pins.d10);
+    // hal::pwm::TCC1Pinout::Pa21(pins.d11);
+    // hal::pwm::TCC1Pinout::Pa22(pins.d12);
+    let tcc0pinout = hal::pwm::TCC0Pinout::Pa23(d13);
 
-    let mut tcc1pwm = hal::pwm::Tcc1Pwm::new(
-        &clocks.tcc0_tcc1(gclk1).unwrap(),
+    //peripherals.TCC1.cc()[7].write(|w| unsafe { w.cc().bits(500) });
+
+    // let mut tcc1pwm = hal::pwm::Tcc1Pwm::new(
+    //     &clocks.tcc0_tcc1(gclk0).unwrap(),
+    //     1.kHz(),
+    //     peripherals.TCC1,
+    //     tcc1pinout,
+    //     &mut peripherals.MCLK,
+    // );
+
+    let mut tcc0pwm = hal::pwm::Tcc0Pwm::new(
+        &clocks.tcc0_tcc1(gclk0).unwrap(),
         1.kHz(),
-        peripherals.TCC1,
-        tcc1pinout,
+        peripherals.TCC0,
+        tcc0pinout,
         &mut peripherals.MCLK,
     );
 
@@ -147,19 +158,30 @@ fn main() -> ! {
     // let (mut rx, _tx) = uart.split();
     // rx.read().unwrap();
 
-    //let mut duty = tcc1pwm.get_max_duty();
-    // tcc1pwm.enable(hal::pwm::Channel::_7);
-    // tcc1pwm.enable(hal::pwm::Channel::_6);
-    // tcc1pwm.enable(hal::pwm::Channel::_5);
-    // tcc1pwm.enable(hal::pwm::Channel::_4);
-    // tcc1pwm.enable(hal::pwm::Channel::_3);
-    // tcc1pwm.enable(hal::pwm::Channel::_2);
-    // tcc1pwm.enable(hal::pwm::Channel::_1);
-    // tcc1pwm.enable(hal::pwm::Channel::_0);
+    let mut duty = tcc0pwm.get_max_duty();
+    //tcc1pwm.enable(hal::pwm::Channel::_0);
+    tcc0pwm.enable(hal::pwm::Channel::_3);
 
     loop {
-        print(b"Hello world\n");
-        // tcc1pwm.set_duty(hal::pwm::Channel::_7, duty);
+        let max_duty_string: String<10> = String::from(tcc0pwm.get_max_duty());
+        let period_string: String<10> = String::from(tcc0pwm.get_period().to_Hz());
+        let current_duty_string: String<10> = String::from(tcc0pwm.get_duty(hal::pwm::Channel::_3));
+
+        print(b"\nMax Duty: ");
+        print(max_duty_string.as_bytes());
+        print(b"\nPeriod: ");
+        print(period_string.as_bytes());
+        print(b"\nCurrent Duty: ");
+        print(current_duty_string.as_bytes());
+        tcc0pwm.set_duty(hal::pwm::Channel::_3, duty);
+
+        // This is hella unsafe
+        // let p = unsafe { feather_m4::pac::Peripherals::steal() };
+        // p.TCC1.cc()[7].write(|w| unsafe { w.bits(duty << 6) });
+        // p.TCC1.ctrla.write(|w| w.enable().set_bit());
+        // p.TCC1.syncbusy.read();
+
+
         // tcc1pwm.set_duty(hal::pwm::Channel::_6, duty);
         // tcc1pwm.set_duty(hal::pwm::Channel::_5, duty);
         // tcc1pwm.set_duty(hal::pwm::Channel::_4, duty);
@@ -167,10 +189,16 @@ fn main() -> ! {
         // tcc1pwm.set_duty(hal::pwm::Channel::_2, duty);
         // tcc1pwm.set_duty(hal::pwm::Channel::_1, duty);
         // tcc1pwm.set_duty(hal::pwm::Channel::_0, duty);
-        //duty += 1;
-        //if duty > tcc1pwm.get_max_duty() { duty = 0; }
-        delay.delay_ms(5u32);
+        duty -= 1;
+        if duty == 0 { duty = tcc0pwm.get_max_duty(); print(b"Looping duty"); }
+        delay.delay_ms(1u32);
     }
+}
+
+#[exception]
+unsafe fn DefaultHandler(_i: i16) {
+    print(b"ASDFADSFDSAFDASF\n");
+    loop {};
 }
 
 static mut USB_ALLOCATOR: Option<UsbBusAllocator<UsbBus>> = None;
