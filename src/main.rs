@@ -24,7 +24,6 @@ use hal::fugit::RateExtU32;
 
 use cortex_m_rt::exception;
 
-// use hal::gpio::{Pin, Pins, *};
 // use hal::sercom::{uart, IoSet1};
 
 #[entry]
@@ -62,34 +61,18 @@ fn main() -> ! {
         delay.delay_ms(100u32);
     }
 
-    let gclk1 = &clocks.gclk1();
-    let gclk0 = &clocks.gclk0();
-
-    // Configure the digital pins for PWM
-    let tcc1pinout = hal::pwm::TCC1Pinout::Pa16(pins.d5);
-    // hal::pwm::TCC1Pinout::Pa18(pins.d6);
-    // hal::pwm::TCC1Pinout::Pa19(pins.d9);
-    // hal::pwm::TCC1Pinout::Pa20(pins.d10);
-    // hal::pwm::TCC1Pinout::Pa21(pins.d11);
-    // hal::pwm::TCC1Pinout::Pa22(pins.d12);
-    let tcc0pinout = hal::pwm::TCC0Pinout::Pa23(d13);
-
-    //peripherals.TCC1.cc()[7].write(|w| unsafe { w.cc().bits(500) });
-
-    // let mut tcc1pwm = hal::pwm::Tcc1Pwm::new(
-    //     &clocks.tcc0_tcc1(gclk0).unwrap(),
-    //     1.kHz(),
-    //     peripherals.TCC1,
-    //     tcc1pinout,
-    //     &mut peripherals.MCLK,
-    // );
-
-    let mut tcc0pwm = hal::pwm::Tcc0Pwm::new(
-        &clocks.tcc0_tcc1(gclk0).unwrap(),
-        50.Hz(),
+    feather_pwm::FeatherPwm::init(
+        pins.d5,
+        pins.d6,
+        pins.d9,
+        pins.d10,
+        pins.d11,
+        pins.d12,
+        d13,
         peripherals.TCC0,
-        tcc0pinout,
+        peripherals.TCC1,
         &mut peripherals.MCLK,
+        &mut clocks,
     );
 
     let uart = feather_m4::uart(
@@ -113,27 +96,27 @@ fn main() -> ! {
     // let (mut rx, _tx) = uart.split();
     // rx.read().unwrap();
 
-    let mut duty = tcc0pwm.get_max_duty();
-    //tcc1pwm.enable(hal::pwm::Channel::_0);
-    tcc0pwm.enable(hal::pwm::Channel::_3);
+    // let mut duty = tcc0pwm.get_max_duty();
+    // //tcc1pwm.enable(hal::pwm::Channel::_0);
+    // tcc0pwm.enable(hal::pwm::Channel::_3);
 
     loop {
-        uwriteln!(
-            UsbSerialWriter,
-            "Max Duty: {}\nPeriod: {}\n Current Duty: {}",
-            tcc0pwm.get_max_duty(),
-            tcc0pwm.get_period().to_Hz(),
-            tcc0pwm.get_duty(hal::pwm::Channel::_3)
-        )
-        .unwrap();
+        // uwriteln!(
+        //     UsbSerialWriter,
+        //     "Max Duty: {}\nPeriod: {}\n Current Duty: {}",
+        //     tcc0pwm.get_max_duty(),
+        //     tcc0pwm.get_period().to_Hz(),
+        //     tcc0pwm.get_duty(hal::pwm::Channel::_3)
+        // )
+        // .unwrap();
 
-        tcc0pwm.set_duty(hal::pwm::Channel::_3, duty);
+        // tcc0pwm.set_duty(hal::pwm::Channel::_3, duty);
 
-        duty -= 1;
-        if duty == 0 {
-            duty = tcc0pwm.get_max_duty();
-            print(b"Looping duty");
-        }
+        // duty -= 1;
+        // if duty == 0 {
+        //     duty = tcc0pwm.get_max_duty();
+        //     print(b"Looping duty");
+        // }
         delay.delay_ms(1u32);
     }
 }
