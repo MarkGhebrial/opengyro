@@ -2,6 +2,8 @@
 #![no_main]
 
 mod feather_pwm;
+use embedded_hal::digital::v2::InputPin;
+use feather_pwm::*;
 mod usb_serial;
 use usb_serial::*;
 
@@ -13,6 +15,9 @@ use feather_m4::hal::clock::GenericClockController;
 
 use feather_m4::hal::delay::Delay;
 use feather_m4::hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+
+use nb;
+use embedded_hal::serial::Read;
 
 use panic_halt as _;
 
@@ -53,6 +58,22 @@ fn main() -> ! {
         &mut core_peripherals.NVIC,
     );
 
+    print(b"Hello\n");
+
+    let mode_pin = pins.a2.into_pull_up_input();
+    let mut d0 = pins.d0.into_readable_output();
+    if mode_pin.is_low().unwrap() {
+        print(b"Configuring radio...");
+        for _ in 0..4 {
+            delay.delay_ms(1u32);
+            d0.set_high().unwrap();
+            delay.delay_ms(1u32);
+            d0.set_low().unwrap();
+        }
+        delay.delay_ms(1000u32);
+        print(b"  ...done\n");
+    }
+
     let mut d13 = pins.d13.into_readable_output();
     for _ in 0..10 {
         d13.set_low().unwrap();
@@ -61,7 +82,9 @@ fn main() -> ! {
         delay.delay_ms(100u32);
     }
 
-    feather_pwm::FeatherPwm::init(
+    print(b"Done blinking\n");
+
+    let pwm = FeatherPwm::init(
         pins.d5,
         pins.d6,
         pins.d9,
@@ -75,14 +98,18 @@ fn main() -> ! {
         &mut clocks,
     );
 
+    print(b"Configured PWM\n");
+
     let uart = feather_m4::uart(
         &mut clocks,
-        125000u32.Hz(), //Hertz::Hz(125000),
+        115200.Hz(), //Hertz::Hz(125000),
         peripherals.SERCOM5,
         &mut peripherals.MCLK,
-        pins.d0,
+        d0,
         pins.d1,
     );
+
+    print(b"Configured UART\n");
 
     let i2c = feather_m4::i2c_master(
         &mut clocks,
@@ -93,14 +120,21 @@ fn main() -> ! {
         pins.scl,
     );
 
-    // let (mut rx, _tx) = uart.split();
-    // rx.read().unwrap();
+    print(b"Configured I2C\n");
+
+    let (mut rx, _tx) = uart.split();
 
     // let mut duty = tcc0pwm.get_max_duty();
     // //tcc1pwm.enable(hal::pwm::Channel::_0);
     // tcc0pwm.enable(hal::pwm::Channel::_3);
 
     loop {
+        print(b"Reading from UART...\n");
+        let frame: u8 = rx.read().unwrap();
+        print(&[frame]);
+
+        //uwriteln!(UsbSerialWriter, "Mode pin: {}", mode_pin.is_high().unwrap()).unwrap();
+
         // uwriteln!(
         //     UsbSerialWriter,
         //     "Max Duty: {}\nPeriod: {}\n Current Duty: {}",
@@ -117,7 +151,7 @@ fn main() -> ! {
         //     duty = tcc0pwm.get_max_duty();
         //     print(b"Looping duty");
         // }
-        delay.delay_ms(1u32);
+        delay.delay_ms(5u32);
     }
 }
 

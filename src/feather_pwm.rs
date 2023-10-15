@@ -36,7 +36,6 @@ impl FeatherPwm {
         clocks: &mut GenericClockController,
     ) -> Self {
         //let gclk1 = &clocks.gclk1();
-        let gclk0 = &clocks.gclk0();
 
         // Configure the digital pins for PWM
         let tcc1pinout = TCC1Pinout::Pa16(d5);
@@ -47,8 +46,11 @@ impl FeatherPwm {
         TCC0Pinout::Pa22(d12);
         let tcc0pinout = TCC0Pinout::Pa23(d13);
 
+        let gclk0 = &clocks.gclk0();
+        let clock = clocks.tcc0_tcc1(gclk0).unwrap();
+
         let tcc1pwm = hal::pwm::Tcc1Pwm::new(
-            &clocks.tcc0_tcc1(gclk0).unwrap(),
+            &clock,
             50.Hz(),
             tcc1,
             tcc1pinout,
@@ -56,7 +58,7 @@ impl FeatherPwm {
         );
 
         let tcc0pwm = hal::pwm::Tcc0Pwm::new(
-            &clocks.tcc0_tcc1(gclk0).unwrap(),
+            &clock,
             50.Hz(),
             tcc0,
             tcc0pinout,
