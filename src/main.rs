@@ -7,7 +7,7 @@ use feather_pwm::*;
 mod usb_serial;
 use usb_serial::*;
 
-use ufmt::uwriteln;
+use ufmt::*;
 
 use feather_m4::ehal::digital::v2::OutputPin;
 use feather_m4::ehal::Pwm;
@@ -100,14 +100,20 @@ fn main() -> ! {
 
     print(b"Configured PWM\n");
 
-    let uart = feather_m4::uart(
+    let mut uart = feather_m4::uart(
         &mut clocks,
+        //125000.Hz(), 
         115200.Hz(), //Hertz::Hz(125000),
         peripherals.SERCOM5,
         &mut peripherals.MCLK,
         d0,
         pins.d1,
     );
+
+    // Set the bit order to msb first
+    let mut config = uart.disable();
+    config.set_bit_order(hal::sercom::uart::BitOrder::MsbFirst);
+    uart = config.enable();
 
     print(b"Configured UART\n");
 
@@ -122,7 +128,7 @@ fn main() -> ! {
 
     print(b"Configured I2C\n");
 
-    let (mut rx, _tx) = uart.split();
+    //let (mut rx, _tx) = uart.split();
 
     // let mut duty = tcc0pwm.get_max_duty();
     // //tcc1pwm.enable(hal::pwm::Channel::_0);
@@ -130,8 +136,42 @@ fn main() -> ! {
 
     loop {
         print(b"Reading from UART...\n");
-        let frame: u8 = rx.read().unwrap();
-        print(&[frame]);
+
+        uart.flush_rx_buffer();
+
+        let mut buf = [0u8; 14];
+
+        for c in buf.iter_mut() {
+        //     match uart.read() {
+        //         Err(nb::Error::WouldBlock) => print(b"Would block\n"),
+        //         Err(nb::Error::Other(e)) => match e {
+        //             hal::sercom::uart::Error::FrameError => uwriteln!(UsbSerialWriter, "Frame error!").unwrap(),
+        //             hal::sercom::uart::Error::Overflow => uwriteln!(UsbSerialWriter, "Overflow error!").unwrap(),
+        //             _ => print(b"Other error\n"),
+        //         },//uwriteln!(UsbSerialWriter, "Error!").unwrap(),
+        //         Ok(byte) => {
+        //             uwriteln!(UsbSerialWriter, "Read byte: {}", byte).unwrap();
+        //             *c = byte;
+        //         }
+        //     }
+            match nb::block!(uart.read()) {
+                Ok(byte) => *c = byte,
+                Err(_) => {
+                    print(b"Error");
+                    break;
+                },
+            }
+        }
+
+        print(b"0x");
+        for (i, c) in buf.iter().enumerate() {
+            //uwrite!(UsbSerialWriter, "Bit {}: {:x}", i, *c).unwrap();
+            uwrite!(UsbSerialWriter, "{:x}", *c).unwrap();
+        }
+        print(b"\n");
+
+        // let byte: u8 = nb::block!(rx.read()).unwrap();
+        // uwrite!(UsbSerialWriter, "{}", byte).unwrap();
 
         //uwriteln!(UsbSerialWriter, "Mode pin: {}", mode_pin.is_high().unwrap()).unwrap();
 
@@ -151,7 +191,6 @@ fn main() -> ! {
         //     duty = tcc0pwm.get_max_duty();
         //     print(b"Looping duty");
         // }
-        delay.delay_ms(5u32);
     }
 }
 
