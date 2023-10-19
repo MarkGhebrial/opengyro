@@ -1,8 +1,8 @@
 use feather_m4::hal;
 use feather_m4::pac;
 
-use hal::prelude::*;
 use fugit::HertzU32 as Hertz;
+use hal::prelude::*;
 
 use hal::clock::GenericClockController;
 use hal::timer::TimerCounter;
@@ -46,7 +46,6 @@ fn TC2() {
     }
 }
 
-
 pub struct UpTimer {
     initial_time: u64,
 }
@@ -54,7 +53,7 @@ pub struct UpTimer {
 impl UpTimer {
     pub fn new() -> Self {
         Self {
-            initial_time: elapsed_ms()
+            initial_time: elapsed_ms(),
         }
     }
 
@@ -63,6 +62,20 @@ impl UpTimer {
     }
 
     pub fn reset(&mut self) {
-        self.initial_time = 0;
+        self.initial_time = elapsed_ms();
     }
 }
+
+// impl embedded_hal::timer::CountDown for UpTimer {
+//     type Time = u64;
+
+//     fn start<T>(&mut self, count: T)
+//     where
+//         T: Into<Self::Time> {
+//         todo!()
+//     }
+
+//     fn wait(&mut self) -> nb::Result<(), Void> {
+//         todo!()
+//     }
+// }
