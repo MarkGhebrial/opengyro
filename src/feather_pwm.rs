@@ -49,21 +49,9 @@ impl FeatherPwm {
         let gclk0 = &clocks.gclk0();
         let clock = clocks.tcc0_tcc1(gclk0).unwrap();
 
-        let tcc1pwm = hal::pwm::Tcc1Pwm::new(
-            &clock,
-            50.Hz(),
-            tcc1,
-            tcc1pinout,
-            mclk,
-        );
+        let tcc1pwm = hal::pwm::Tcc1Pwm::new(&clock, 50.Hz(), tcc1, tcc1pinout, mclk);
 
-        let tcc0pwm = hal::pwm::Tcc0Pwm::new(
-            &clock,
-            50.Hz(),
-            tcc0,
-            tcc0pinout,
-            mclk,
-        );
+        let tcc0pwm = hal::pwm::Tcc0Pwm::new(&clock, 50.Hz(), tcc0, tcc0pinout, mclk);
 
         FeatherPwm { tcc0pwm, tcc1pwm }
     }

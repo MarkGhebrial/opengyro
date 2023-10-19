@@ -10,6 +10,8 @@ mod usb_serial;
 use usb_serial::*;
 
 mod dsmrx;
+mod timer;
+use timer::*;
 
 use ufmt::*;
 
@@ -67,19 +69,12 @@ fn main() -> ! {
 
     print(b"Hello\n");
 
-    // <CONFIGURE TIMER>
-    let gclk1 = &clocks.gclk1();
-    let tcclk = clocks.tc2_tc3(gclk1).unwrap();
-    let mut timer = TimerCounter::tc2_(&tcclk, peripherals.TC2, &mut peripherals.MCLK);
-
-    unsafe {
-        core_peripherals.NVIC.set_priority(interrupt::TC2, 10);
-        NVIC::unmask(interrupt::TC2);
-    }
-
-    timer.start(Hertz::kHz(1).into_duration());
-    timer.enable_interrupt();
-    // </CONFIGURE TIMER>
+    init_timer(
+        peripherals.TC2,
+        &mut peripherals.MCLK,
+        &mut core_peripherals.NVIC,
+        &mut clocks,
+    );
 
     let mode_pin = pins.a2.into_pull_up_input();
     let mut d0 = pins.d0.into_readable_output();
@@ -205,22 +200,4 @@ fn main() -> ! {
 unsafe fn DefaultHandler(_i: i16) {
     print(b"ASDFADSFDSAFDASF\n");
     loop {}
-}
-
-static mut ELAPSED_MS: u64 = 0;
-
-fn elapsed_ms() -> u64 {
-    unsafe { ELAPSED_MS }
-}
-
-#[interrupt]
-fn TC2() {
-    unsafe {
-        // TODO: Don't steal the peripherials!!
-        let tc2 = feather_m4::pac::Peripherals::steal().TC2;
-        tc2.count16().intflag.write(|w| w.ovf().set_bit());
-
-        ELAPSED_MS += 1;
-    }
-    //print(b"Interrupt");
 }
