@@ -2,22 +2,27 @@
 #![no_main]
 
 mod feather_pwm;
-use embedded_hal::digital::v2::InputPin;
+use cortex_m::peripheral::NVIC;
+use feather_m4::hal::time::Hertz;
 use feather_pwm::*;
+
 mod usb_serial;
 use usb_serial::*;
 
+mod dsmrx;
+
 use ufmt::*;
 
-use feather_m4::ehal::digital::v2::OutputPin;
-use feather_m4::ehal::Pwm;
 use feather_m4::hal::clock::GenericClockController;
+use feather_m4::hal::timer::TimerCounter;
 
 use feather_m4::hal::delay::Delay;
-use feather_m4::hal::prelude::_embedded_hal_blocking_delay_DelayMs;
+use feather_m4::hal::prelude::*;
 
-use nb;
+use feather_m4::pac::interrupt;
+
 use embedded_hal::serial::Read;
+use nb;
 
 use panic_halt as _;
 
@@ -58,7 +63,23 @@ fn main() -> ! {
         &mut core_peripherals.NVIC,
     );
 
+    delay.delay_ms(2000u32);
+
     print(b"Hello\n");
+
+    // <CONFIGURE TIMER>
+    let gclk1 = &clocks.gclk1();
+    let tcclk = clocks.tc2_tc3(gclk1).unwrap();
+    let mut timer = TimerCounter::tc2_(&tcclk, peripherals.TC2, &mut peripherals.MCLK);
+
+    unsafe {
+        core_peripherals.NVIC.set_priority(interrupt::TC2, 10);
+        NVIC::unmask(interrupt::TC2);
+    }
+
+    timer.start(Hertz::kHz(1).into_duration());
+    timer.enable_interrupt();
+    // </CONFIGURE TIMER>
 
     let mode_pin = pins.a2.into_pull_up_input();
     let mut d0 = pins.d0.into_readable_output();
@@ -102,8 +123,7 @@ fn main() -> ! {
 
     let mut uart = feather_m4::uart(
         &mut clocks,
-        //125000.Hz(), 
-        115200.Hz(), //Hertz::Hz(125000),
+        115200.Hz(),
         peripherals.SERCOM5,
         &mut peripherals.MCLK,
         d0,
@@ -111,9 +131,9 @@ fn main() -> ! {
     );
 
     // Set the bit order to msb first
-    let mut config = uart.disable();
-    config.set_bit_order(hal::sercom::uart::BitOrder::MsbFirst);
-    uart = config.enable();
+    // let mut config = uart.disable();
+    // config.set_bit_order(hal::sercom::uart::BitOrder::MsbFirst);
+    // uart = config.enable();
 
     print(b"Configured UART\n");
 
@@ -135,62 +155,49 @@ fn main() -> ! {
     // tcc0pwm.enable(hal::pwm::Channel::_3);
 
     loop {
-        print(b"Reading from UART...\n");
+        uwrite!(UsbSerialWriter, "{} ", elapsed_ms()).unwrap();
 
-        uart.flush_rx_buffer();
+        print(b"Reading from UART... ");
 
-        let mut buf = [0u8; 14];
+        //uart.flush_rx_buffer();
+
+        let mut buf = [0u8; 16];
 
         for c in buf.iter_mut() {
-        //     match uart.read() {
-        //         Err(nb::Error::WouldBlock) => print(b"Would block\n"),
-        //         Err(nb::Error::Other(e)) => match e {
-        //             hal::sercom::uart::Error::FrameError => uwriteln!(UsbSerialWriter, "Frame error!").unwrap(),
-        //             hal::sercom::uart::Error::Overflow => uwriteln!(UsbSerialWriter, "Overflow error!").unwrap(),
-        //             _ => print(b"Other error\n"),
-        //         },//uwriteln!(UsbSerialWriter, "Error!").unwrap(),
-        //         Ok(byte) => {
-        //             uwriteln!(UsbSerialWriter, "Read byte: {}", byte).unwrap();
-        //             *c = byte;
-        //         }
-        //     }
+            //     match uart.read() {
+            //         Err(nb::Error::WouldBlock) => print(b"Would block\n"),
+            //         Err(nb::Error::Other(e)) => match e {
+            //             hal::sercom::uart::Error::FrameError => uwriteln!(UsbSerialWriter, "Frame error!").unwrap(),
+            //             hal::sercom::uart::Error::Overflow => uwriteln!(UsbSerialWriter, "Overflow error!").unwrap(),
+            //             _ => print(b"Other error\n"),
+            //         },//uwriteln!(UsbSerialWriter, "Error!").unwrap(),
+            //         Ok(byte) => {
+            //             uwriteln!(UsbSerialWriter, "Read byte: {}", byte).unwrap();
+            //             *c = byte;
+            //         }
+            //     }
             match nb::block!(uart.read()) {
                 Ok(byte) => *c = byte,
-                Err(_) => {
-                    print(b"Error");
-                    break;
-                },
+                Err(e) => {
+                    match e {
+                        hal::sercom::uart::Error::FrameError => {
+                            uwriteln!(UsbSerialWriter, "Frame error!").unwrap()
+                        }
+                        hal::sercom::uart::Error::Overflow => {
+                            uwriteln!(UsbSerialWriter, "Overflow error!").unwrap()
+                        }
+                        _ => print(b"Other error\n"),
+                    };
+                    uart.clear_status(hal::sercom::uart::Status::empty()); // Clear the error flags
+                }
             }
         }
 
         print(b"0x");
-        for (i, c) in buf.iter().enumerate() {
-            //uwrite!(UsbSerialWriter, "Bit {}: {:x}", i, *c).unwrap();
+        for c in buf.iter() {
             uwrite!(UsbSerialWriter, "{:x}", *c).unwrap();
         }
         print(b"\n");
-
-        // let byte: u8 = nb::block!(rx.read()).unwrap();
-        // uwrite!(UsbSerialWriter, "{}", byte).unwrap();
-
-        //uwriteln!(UsbSerialWriter, "Mode pin: {}", mode_pin.is_high().unwrap()).unwrap();
-
-        // uwriteln!(
-        //     UsbSerialWriter,
-        //     "Max Duty: {}\nPeriod: {}\n Current Duty: {}",
-        //     tcc0pwm.get_max_duty(),
-        //     tcc0pwm.get_period().to_Hz(),
-        //     tcc0pwm.get_duty(hal::pwm::Channel::_3)
-        // )
-        // .unwrap();
-
-        // tcc0pwm.set_duty(hal::pwm::Channel::_3, duty);
-
-        // duty -= 1;
-        // if duty == 0 {
-        //     duty = tcc0pwm.get_max_duty();
-        //     print(b"Looping duty");
-        // }
     }
 }
 
@@ -198,4 +205,22 @@ fn main() -> ! {
 unsafe fn DefaultHandler(_i: i16) {
     print(b"ASDFADSFDSAFDASF\n");
     loop {}
+}
+
+static mut ELAPSED_MS: u64 = 0;
+
+fn elapsed_ms() -> u64 {
+    unsafe { ELAPSED_MS }
+}
+
+#[interrupt]
+fn TC2() {
+    unsafe {
+        // TODO: Don't steal the peripherials!!
+        let tc2 = feather_m4::pac::Peripherals::steal().TC2;
+        tc2.count16().intflag.write(|w| w.ovf().set_bit());
+
+        ELAPSED_MS += 1;
+    }
+    //print(b"Interrupt");
 }
