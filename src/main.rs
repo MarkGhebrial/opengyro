@@ -149,6 +149,8 @@ fn main() -> ! {
     // //tcc1pwm.enable(hal::pwm::Channel::_0);
     // tcc0pwm.enable(hal::pwm::Channel::_3);
 
+    let mut dsm_rx = dsmrx::DsmRx::new();
+
     loop {
         uwrite!(UsbSerialWriter, "{} ", elapsed_ms()).unwrap();
 
@@ -156,43 +158,56 @@ fn main() -> ! {
 
         //uart.flush_rx_buffer();
 
-        let mut buf = [0u8; 16];
+        // let mut buf = [0u8; 17];
 
-        for c in buf.iter_mut() {
-            //     match uart.read() {
-            //         Err(nb::Error::WouldBlock) => print(b"Would block\n"),
-            //         Err(nb::Error::Other(e)) => match e {
-            //             hal::sercom::uart::Error::FrameError => uwriteln!(UsbSerialWriter, "Frame error!").unwrap(),
-            //             hal::sercom::uart::Error::Overflow => uwriteln!(UsbSerialWriter, "Overflow error!").unwrap(),
-            //             _ => print(b"Other error\n"),
-            //         },//uwriteln!(UsbSerialWriter, "Error!").unwrap(),
-            //         Ok(byte) => {
-            //             uwriteln!(UsbSerialWriter, "Read byte: {}", byte).unwrap();
-            //             *c = byte;
-            //         }
-            //     }
-            match nb::block!(uart.read()) {
-                Ok(byte) => *c = byte,
-                Err(e) => {
-                    match e {
-                        hal::sercom::uart::Error::FrameError => {
-                            uwriteln!(UsbSerialWriter, "Frame error!").unwrap()
-                        }
-                        hal::sercom::uart::Error::Overflow => {
-                            uwriteln!(UsbSerialWriter, "Overflow error!").unwrap()
-                        }
-                        _ => print(b"Other error\n"),
-                    };
-                    uart.clear_status(hal::sercom::uart::Status::empty()); // Clear the error flags
+        // for c in buf.iter_mut() {
+        //     match nb::block!(uart.read()) {
+        //         Ok(byte) => *c = byte,
+        //         Err(e) => {
+        //             match e {
+        //                 hal::sercom::uart::Error::FrameError => {
+        //                     uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
+        //                     uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
+        //                 }
+        //                 hal::sercom::uart::Error::Overflow => {
+        //                     uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
+        //                     uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
+        //                 }
+        //                 _ => print(b"Other error\n"),
+        //             };
+        //         }
+        //     }
+        // }
+
+        while dsm_rx.buffer_index < 13 {
+            let byte = loop {
+                match nb::block!(uart.read()) {
+                    Ok(byte) => break byte,
+                    Err(hal::sercom::uart::Error::Overflow) => {
+                        uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
+                        uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
+                    }
+                    Err(hal::sercom::uart::Error::FrameError) => {
+                        uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
+                        uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
+                    }
+                    //Err(hal::sercom::uart::Error)
+                    _ => print(b"Other error\n"),
                 }
-            }
+            };
+
+            dsm_rx.handle_serial_event(byte);
+            uwriteln!(UsbSerialWriter, "Buf len: {}", dsm_rx.buffer_index).unwrap();
         }
 
         print(b"0x");
-        for c in buf.iter() {
-            uwrite!(UsbSerialWriter, "{:x}", *c).unwrap();
+        for c in dsm_rx.buffer.iter() {
+            uwrite!(UsbSerialWriter, "{:02x} ", *c).unwrap();
         }
         print(b"\n");
+
+        let frame = dsm_rx.parse_frame();
+        uwriteln!(UsbSerialWriter, "{:?}", frame).unwrap();
     }
 }
 

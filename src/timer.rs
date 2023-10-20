@@ -10,6 +10,8 @@ use hal::timer::TimerCounter;
 use pac::interrupt;
 use pac::NVIC;
 
+use core::sync::atomic::{AtomicUsize, Ordering};
+
 pub fn init_timer(
     tc2: pac::TC2,
     mclk: &mut pac::MCLK,
@@ -21,7 +23,8 @@ pub fn init_timer(
     let mut timer = TimerCounter::tc2_(&tcclk, tc2, mclk);
 
     unsafe {
-        nvic.set_priority(interrupt::TC2, 1);
+        // TODO: Consider setting prority to 0 so that no timer interrupts are missed
+        nvic.set_priority(interrupt::TC2, 0);
         NVIC::unmask(interrupt::TC2);
     }
 
@@ -29,10 +32,10 @@ pub fn init_timer(
     timer.enable_interrupt();
 }
 
-static mut ELAPSED_MS: u64 = 0;
+static mut ELAPSED_MS: AtomicUsize = AtomicUsize::new(0);
 
-pub fn elapsed_ms() -> u64 {
-    unsafe { ELAPSED_MS }
+pub fn elapsed_ms() -> usize {
+    unsafe { ELAPSED_MS.load(Ordering::Relaxed) }
 }
 
 #[interrupt]
@@ -40,14 +43,15 @@ fn TC2() {
     unsafe {
         // TODO: Don't steal the peripherials!!
         let tc2 = feather_m4::pac::Peripherals::steal().TC2;
+        // This flag needs to be cleared (by writing 1 to the bit) or else the interrupt will never exit
         tc2.count16().intflag.write(|w| w.ovf().set_bit());
 
-        ELAPSED_MS += 1;
+        ELAPSED_MS.fetch_add(1, Ordering::Relaxed);
     }
 }
 
 pub struct UpTimer {
-    initial_time: u64,
+    initial_time: usize,
 }
 
 impl UpTimer {
@@ -57,7 +61,7 @@ impl UpTimer {
         }
     }
 
-    pub fn elapsed_ms(&self) -> u64 {
+    pub fn elapsed_ms(&self) -> usize {
         elapsed_ms() - self.initial_time
     }
 
