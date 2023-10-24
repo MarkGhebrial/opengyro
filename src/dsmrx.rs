@@ -113,12 +113,12 @@ impl DsmRx /*<Rx>*/
             channel_id: 0,
             position: 0,
         }; 7];
-        
+
         for i in 1..8 {
             let index = i * 2 as usize;
             let servo = [self.buffer[index], self.buffer[index + 1]];
 
-            servos[i-1] = Dsm1024Servo::from(servo);
+            servos[i - 1] = Dsm1024Servo::from(servo);
         }
 
         let frame = DsmInternalFrame {
