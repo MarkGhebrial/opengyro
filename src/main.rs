@@ -2,9 +2,6 @@
 #![no_main]
 
 mod feather_pwm;
-use cortex_m::peripheral::NVIC;
-use feather_m4::hal::clock::v2::types::Pac;
-use feather_m4::hal::time::Hertz;
 use feather_pwm::*;
 
 mod usb_serial;
@@ -16,27 +13,16 @@ use timer::*;
 
 use ufmt::*;
 
-use hal::clock::GenericClockController;
-use hal::dmac::*;
-use hal::sercom::dma;
-use hal::timer::TimerCounter;
-
-use hal::delay::Delay;
+use feather_m4::hal;
 use hal::prelude::*;
+
+use hal::clock::GenericClockController;
+use hal::delay::Delay;
+use hal::dmac::*;
 
 use panic_halt as _;
 
-//use cortex_m::asm;
-//use cortex_m_rt::entry;
 use feather_m4::entry;
-use feather_m4::hal;
-use hal::fugit::RateExtU32;
-
-use hal::sercom::uart::Flags;
-
-use cortex_m_rt::exception;
-
-// use hal::sercom::{uart, IoSet1};
 
 #[entry]
 fn main() -> ! {
@@ -121,7 +107,7 @@ fn main() -> ! {
 
     print(b"Configured PWM\n");
 
-    let mut uart = feather_m4::uart(
+    let uart = feather_m4::uart(
         &mut clocks,
         115200.Hz(),
         peripherals.SERCOM5,
@@ -156,18 +142,12 @@ fn main() -> ! {
 
     print(b"Configured I2C\n");
 
-    //let (mut rx, _tx) = uart.split();
-
-    // let mut duty = tcc0pwm.get_max_duty();
-    // //tcc1pwm.enable(hal::pwm::Channel::_0);
-    // tcc0pwm.enable(hal::pwm::Channel::_3);
-
     let mut dsm_rx = dsmrx::DsmRx::new();
 
     loop {
-        uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
+        //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
 
-        uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
+        //uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
         if rx_dma.complete() {
             let (chan1, uart, rx_buffer) = rx_dma.wait();
             uwriteln!(UsbSerialWriter, "{:?}", rx_buffer).unwrap();
@@ -175,6 +155,6 @@ fn main() -> ! {
             rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
 
-        delay.delay_ms(5u32);
+        //delay.delay_ms(5u32);
     }
 }
