@@ -8,6 +8,8 @@ mod usb_serial;
 use usb_serial::*;
 
 mod dsmrx;
+use dsmrx::*;
+
 mod timer;
 use timer::*;
 
@@ -142,7 +144,7 @@ fn main() -> ! {
 
     print(b"Configured I2C\n");
 
-    let mut dsm_rx = dsmrx::DsmRx::new();
+    let mut dsm_rx = DsmRx::new();
 
     loop {
         //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
@@ -151,6 +153,15 @@ fn main() -> ! {
         if rx_dma.complete() {
             let (chan1, uart, rx_buffer) = rx_dma.wait();
             uwriteln!(UsbSerialWriter, "{:?}", rx_buffer).unwrap();
+
+            let bytes: [u8; 16] = rx_buffer.clone();
+            for byte in bytes {
+                dsm_rx.handle_serial_event(byte);
+                if dsm_rx.frame_is_avaliable() {
+                    uwriteln!(UsbSerialWriter, "{:?}", dsm_rx.parse_frame()).unwrap();
+                }
+            }
+            //uwriteln!(UsbSerialWriter, "Buff idx: {}", dsm_rx.buffer_index).unwrap();
 
             rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
