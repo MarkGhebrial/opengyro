@@ -3,6 +3,7 @@
 
 mod feather_pwm;
 use cortex_m::peripheral::NVIC;
+use feather_m4::hal::clock::v2::types::Pac;
 use feather_m4::hal::time::Hertz;
 use feather_pwm::*;
 
@@ -16,17 +17,12 @@ use timer::*;
 use ufmt::*;
 
 use hal::clock::GenericClockController;
+use hal::dmac::*;
+use hal::sercom::dma;
 use hal::timer::TimerCounter;
 
 use hal::delay::Delay;
 use hal::prelude::*;
-
-use hal::sercom::uart::Status;
-
-use feather_m4::pac::interrupt;
-
-use embedded_hal::serial::Read;
-use nb;
 
 use panic_halt as _;
 
@@ -57,6 +53,11 @@ fn main() -> ! {
         &mut peripherals.NVMCTRL,
     );
     let mut delay = Delay::new(core_peripherals.SYST, &mut clocks);
+
+    let mut dmac = DmaController::init(peripherals.DMAC, &mut peripherals.PM);
+    let channels = dmac.split();
+    //let chan0 = channels.0.init(PriorityLevel::LVL0);
+    let chan1 = channels.1.init(PriorityLevel::LVL0);
 
     let pins = feather_m4::Pins::new(peripherals.PORT);
 
@@ -134,18 +135,13 @@ fn main() -> ! {
     // config.set_bit_order(hal::sercom::uart::BitOrder::MsbFirst);
     // uart = config.enable();
 
-    unsafe {
-        // interrupt must be enabled and unmasked in the NVIC
-        // (Nested Vector Interrupt Controller) peripheral
-        core_peripherals.NVIC.set_priority(interrupt::SERCOM5_2, 1);
-        NVIC::unmask(interrupt::SERCOM5_2);
-    }
+    const LENGTH: usize = 16;
+    let rx_buffer: &'static mut [u8; LENGTH] =
+        cortex_m::singleton!(: [u8; LENGTH] = [0x00; LENGTH]).unwrap();
 
-    uart.enable_interrupts(Flags::RXC);
+    let waker = |_| {};
 
-    unsafe {
-        UART = Some(uart);
-    }
+    let mut rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
 
     print(b"Configured UART\n");
 
@@ -170,111 +166,15 @@ fn main() -> ! {
 
     loop {
         uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
-        delay.delay_ms(5u32);
 
-        // print(b"Reading from UART... ");
+        uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
+        if rx_dma.complete() {
+            let (chan1, uart, rx_buffer) = rx_dma.wait();
+            uwriteln!(UsbSerialWriter, "{:?}", rx_buffer).unwrap();
 
-        // //uart.flush_rx_buffer();
-
-        // // let mut buf = [0u8; 17];
-
-        // // for c in buf.iter_mut() {
-        // //     match nb::block!(uart.read()) {
-        // //         Ok(byte) => *c = byte,
-        // //         Err(e) => {
-        // //             match e {
-        // //                 hal::sercom::uart::Error::FrameError => {
-        // //                     uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
-        // //                     uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
-        // //                 }
-        // //                 hal::sercom::uart::Error::Overflow => {
-        // //                     uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
-        // //                     uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
-        // //                 }
-        // //                 _ => print(b"Other error\n"),
-        // //             };
-        // //         }
-        // //     }
-        // // }
-
-        // while dsm_rx.buffer_index < 13 {
-        //     let byte = loop {
-        //         match nb::block!(uart.read()) {
-        //             Ok(byte) => break byte,
-        //             Err(hal::sercom::uart::Error::Overflow) => {
-        //                 uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
-        //                 uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
-        //             }
-        //             Err(hal::sercom::uart::Error::FrameError) => {
-        //                 uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
-        //                 uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
-        //             }
-        //             //Err(hal::sercom::uart::Error)
-        //             _ => print(b"Other error\n"),
-        //         }
-        //     };
-
-        //     dsm_rx.handle_serial_event(byte);
-        //     uwriteln!(UsbSerialWriter, "Buf len: {}", dsm_rx.buffer_index).unwrap();
-        // }
-
-        // print(b"0x");
-        // for c in dsm_rx.buffer.iter() {
-        //     uwrite!(UsbSerialWriter, "{:02x} ", *c).unwrap();
-        // }
-        // print(b"\n");
-
-        // let frame = dsm_rx.parse_frame();
-        // uwriteln!(UsbSerialWriter, "{:?}", frame).unwrap();
-    }
-}
-
-#[exception]
-unsafe fn DefaultHandler(_i: i16) {
-    print(b"ASDFADSFDSAFDASF\n");
-    loop {}
-}
-
-static mut UART: Option<feather_m4::Uart> = None;
-
-#[interrupt]
-fn SERCOM5_2() {
-    uwrite!(UsbSerialWriter, "{}ms -> ", elapsed_ms()).unwrap();
-
-    unsafe {
-        if let Some(uart) = &mut UART {
-            let data: u32 = uart.read_data();
-
-            let mut loops = 0;
-            while uart.read_flags().contains(Flags::RXC) {
-                // print(b"rxc\n");
-                // uart.read_data();
-                loops += 1;
-            }
-
-            let status = uart.read_status();
-            let buffovf = status.contains(hal::sercom::uart::Status::BUFOVF);
-            let ferr = status.contains(hal::sercom::uart::Status::FERR);
-
-            uart.clear_status(Status::all());
-
-            uwriteln!(
-                UsbSerialWriter,
-                "Status: {:#x}, Buffovf: {}, Ferr: {}, Loops {}",
-                status.bits(),
-                buffovf,
-                ferr,
-                loops
-            )
-            .unwrap();
-
-            let bytes: [u8; 4] = data.to_be_bytes();
-
-            uwriteln!(UsbSerialWriter, "Recieved data {:?}", bytes).unwrap();
-
-            // for b in bytes.iter() {
-            //     uwriteln!(UsbSerialWriter, "Recieved byte {:#x}", data).unwrap();
-            // }
+            rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
+
+        delay.delay_ms(5u32);
     }
 }
