@@ -2,7 +2,6 @@
 #![no_main]
 
 mod feather_pwm;
-use feather_m4::hal::clock::v2::dfll::OpenLoop;
 use feather_pwm::*;
 
 mod usb_serial;
@@ -110,7 +109,7 @@ fn main() -> ! {
 
     print(b"Configured PWM\n");
 
-    let mut uart = feather_m4::uart(
+    let uart = feather_m4::uart(
         &mut clocks,
         115200.Hz(),
         peripherals.SERCOM5,
@@ -144,7 +143,7 @@ fn main() -> ! {
 
     print(b"Configured UART\n");
 
-    let i2c = feather_m4::i2c_master(
+    let _i2c = feather_m4::i2c_master(
         &mut clocks,
         125000u32.Hz(), // TODO: figure out frequency
         peripherals.SERCOM2,

@@ -1,7 +1,6 @@
 //use embedded_hal::serial::Read;
 
 use crate::timer::UpTimer;
-use crate::usb_serial::print;
 
 #[allow(non_camel_case_types)]
 #[derive(ufmt::derive::uDebug, PartialEq)]
