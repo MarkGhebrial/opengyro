@@ -1,11 +1,11 @@
-use embedded_hal::serial::Read;
+//use embedded_hal::serial::Read;
 
 use crate::timer::UpTimer;
 use crate::usb_serial::print;
 
 #[allow(non_camel_case_types)]
 #[derive(ufmt::derive::uDebug, PartialEq)]
-enum DsmSystem {
+pub enum DsmSystem {
     DsmX_11Ms = 0x01,
     DsmX_22Ms = 0x12,
     Dsm2_11Ms = 0xa2,
@@ -31,6 +31,12 @@ pub struct Dsm1024Servo {
     pub position: u16,
 }
 
+impl Dsm1024Servo {
+    pub fn get_us(&self) -> u16 {
+        (self.position as f64 * 1.166) as u16 + 903
+    }
+}
+
 impl From<u16> for Dsm1024Servo {
     fn from(value: u16) -> Self {
         Self {
@@ -48,9 +54,9 @@ impl From<[u8; 2]> for Dsm1024Servo {
 
 #[derive(ufmt::derive::uDebug)]
 pub struct DsmInternalFrame {
-    fades: u8,
-    system: DsmSystem,
-    servos: [Dsm1024Servo; 7],
+    pub fades: u8,
+    pub system: DsmSystem,
+    pub servos: [Dsm1024Servo; 7],
 }
 
 impl From<&[u8; 16]> for DsmInternalFrame {
@@ -114,13 +120,13 @@ impl DsmRx /*<Rx>*/
     }
 
     pub fn handle_serial_event(&mut self, byte: u8) {
-        // if self.timer.elapsed_ms() > 17 {
-        //     self.clear_buffer();
-        // }
-        if DsmSystem::from(byte) != DsmSystem::Invalid && self.buffer_index >= 1 {
-            self.buffer[0] = self.buffer[self.buffer_index - 1];
-            self.buffer_index = 1;
+        if self.timer.elapsed_ms() > 17 {
+            self.clear_buffer();
         }
+        // if DsmSystem::from(byte) != DsmSystem::Invalid && self.buffer_index >= 1 {
+        //     self.buffer[0] = self.buffer[self.buffer_index - 1];
+        //     self.buffer_index = 1;
+        // }
 
         self.buffer[self.buffer_index] = byte;
         self.buffer_index += 1;

@@ -2,6 +2,7 @@
 #![no_main]
 
 mod feather_pwm;
+use feather_m4::hal::clock::v2::dfll::OpenLoop;
 use feather_pwm::*;
 
 mod usb_serial;
@@ -93,7 +94,7 @@ fn main() -> ! {
 
     print(b"Done blinking\n");
 
-    let pwm = FeatherPwm::init(
+    let mut pwm = FeatherPwm::init(
         pins.d5,
         pins.d6,
         pins.d9,
@@ -109,7 +110,7 @@ fn main() -> ! {
 
     print(b"Configured PWM\n");
 
-    let uart = feather_m4::uart(
+    let mut uart = feather_m4::uart(
         &mut clocks,
         115200.Hz(),
         peripherals.SERCOM5,
@@ -127,8 +128,18 @@ fn main() -> ! {
     let rx_buffer: &'static mut [u8; LENGTH] =
         cortex_m::singleton!(: [u8; LENGTH] = [0x00; LENGTH]).unwrap();
 
-    let waker = |_| {};
+    // // Read bits from the UART until there's a gap of more than 10ms
+    // // This ensures that each dma transfer contains a full dsm frame
+    let mut timer = UpTimer::new();
+    // while timer.elapsed_ms() < 10 {
+    //     timer.reset();
+    //     nb::block!(uart.read()).unwrap();
+    // }
+    // for _ in 0..15 {
+    //     nb::block!(uart.read()).unwrap();
+    // }
 
+    let waker = |_| {};
     let mut rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
 
     print(b"Configured UART\n");
@@ -145,6 +156,7 @@ fn main() -> ! {
     print(b"Configured I2C\n");
 
     let mut dsm_rx = DsmRx::new();
+    let mut latest_frame: Option<DsmInternalFrame> = None;
 
     loop {
         //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
@@ -152,19 +164,31 @@ fn main() -> ! {
         //uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
         if rx_dma.complete() {
             let (chan1, uart, rx_buffer) = rx_dma.wait();
-            uwriteln!(UsbSerialWriter, "{:?}", rx_buffer).unwrap();
+            //uwriteln!(UsbSerialWriter, "Elapsed: {}ms {:?}", timer.elapsed_ms(), rx_buffer).unwrap();
+            timer.reset();
 
-            let bytes: [u8; 16] = rx_buffer.clone();
+            let bytes = rx_buffer.clone();
             for byte in bytes {
                 dsm_rx.handle_serial_event(byte);
                 if dsm_rx.frame_is_avaliable() {
-                    uwriteln!(UsbSerialWriter, "{:?}", dsm_rx.parse_frame()).unwrap();
+                    let frame = dsm_rx.parse_frame();
+                    latest_frame = Some(frame);
+                    //uwriteln!(UsbSerialWriter, "{:?}", frame).unwrap();
                 }
             }
             //uwriteln!(UsbSerialWriter, "Buff idx: {}", dsm_rx.buffer_index).unwrap();
 
             rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
+
+        uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
+        if let Some(ref frame) = latest_frame {
+            for servo in frame.servos {
+                uwrite!(UsbSerialWriter, "{} -> {}us; ", servo.channel_id, servo.get_us()).unwrap();
+                pwm.set_channel_us(servo.channel_id, servo.get_us());
+            }
+        }
+        print(b"\n");
 
         //delay.delay_ms(5u32);
     }
