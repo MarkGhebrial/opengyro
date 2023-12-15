@@ -6,11 +6,9 @@ use hal::clock::GenericClockController;
 use hal::gpio::*;
 use hal::pwm::*;
 
-type D5Type = Pin<PA16, AlternateG>;
-//type D5Type = AnyPin;
+use hal::pwm::Channel;
 use hal::pwm::TCC1Pinout;
 use hal::pwm::Tcc1Pwm;
-use hal::pwm::Channel;
 
 use fugit::RateExtU32;
 
@@ -56,15 +54,21 @@ impl FeatherPwm {
     }
 
     pub fn set_channel_us(&mut self, channel: u8, us: u16) {
-        let period_us: f32 = (1.0/50.0) * 1000000.0;
+        let period_us: f32 = (1.0 / 50.0) * 1000000.0;
         let max_duty = self.tcc1pwm.get_max_duty();
 
         let duty: f32 = us as f32 / period_us; // Get the duty as a percentage (from 0.0 to 1.0)
         let scaled_duty: u32 = (duty * max_duty as f32) as u32;
 
-        if channel == 0 {
-            ufmt::uwriteln!(crate::usb_serial::UsbSerialWriter, "Duty: {}/{}", scaled_duty, max_duty).unwrap();
-            self.tcc1pwm.set_duty(Channel::_0, scaled_duty);
-        }
+        match channel {
+            0 => self.tcc1pwm.set_duty(Channel::_0, scaled_duty),
+            1 => self.tcc1pwm.set_duty(Channel::_2, scaled_duty),
+            2 => self.tcc1pwm.set_duty(Channel::_3, scaled_duty),
+            3 => self.tcc0pwm.set_duty(Channel::_0, scaled_duty),
+            4 => self.tcc0pwm.set_duty(Channel::_1, scaled_duty),
+            5 => self.tcc0pwm.set_duty(Channel::_2, scaled_duty),
+            6 => self.tcc0pwm.set_duty(Channel::_3, scaled_duty),
+            _ => (),
+        };
     }
 }

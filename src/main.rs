@@ -14,6 +14,7 @@ mod timer;
 use timer::*;
 
 use ufmt::*;
+use ufmt_float::*;
 
 use feather_m4::hal;
 use hal::prelude::*;
@@ -21,6 +22,9 @@ use hal::prelude::*;
 use hal::clock::GenericClockController;
 use hal::delay::Delay;
 use hal::dmac::*;
+
+use icm20948::i2c as icm_i2c;
+use icm20948_driver::icm20948;
 
 use panic_halt as _;
 
@@ -143,7 +147,7 @@ fn main() -> ! {
 
     print(b"Configured UART\n");
 
-    let _i2c = feather_m4::i2c_master(
+    let i2c = feather_m4::i2c_master(
         &mut clocks,
         125000u32.Hz(), // TODO: figure out frequency
         peripherals.SERCOM2,
@@ -152,7 +156,14 @@ fn main() -> ! {
         pins.scl,
     );
 
-    print(b"Configured I2C\n");
+    print(b"Configured I2C peripheral\n");
+
+    let mut imu = icm_i2c::IcmImu::new(i2c, 0x69).unwrap();
+    imu.enable_gyro().unwrap();
+
+    print(b"Enabled gyro\n");
+
+    
 
     let mut dsm_rx = DsmRx::new();
     let mut latest_frame: Option<DsmInternalFrame> = None;
@@ -183,11 +194,24 @@ fn main() -> ! {
         uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
         if let Some(ref frame) = latest_frame {
             for servo in frame.servos {
-                uwrite!(UsbSerialWriter, "{} -> {}us; ", servo.channel_id, servo.get_us()).unwrap();
+                uwrite!(
+                    UsbSerialWriter,
+                    "{} -> {}us; ",
+                    servo.channel_id,
+                    servo.get_us()
+                )
+                .unwrap();
                 pwm.set_channel_us(servo.channel_id, servo.get_us());
             }
         }
         print(b"\n");
+
+        // Print gyro readings
+        let x = uFmt_f32::Five(imu.read_gyro_x().unwrap());
+        let y = uFmt_f32::Five(imu.read_gyro_y().unwrap());
+        let z = uFmt_f32::Five(imu.read_gyro_z().unwrap());
+
+        uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
 
         //delay.delay_ms(5u32);
     }
