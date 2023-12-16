@@ -171,7 +171,6 @@ fn main() -> ! {
     loop {
         //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
 
-        //uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
         if rx_dma.complete() {
             let (chan1, uart, rx_buffer) = rx_dma.wait();
             //uwriteln!(UsbSerialWriter, "Elapsed: {}ms {:?}", timer.elapsed_ms(), rx_buffer).unwrap();

@@ -1,4 +1,4 @@
-use core::ops::Add;
+use core::{ops::Add, any::Any};
 
 pub trait PipelineElement<Input, Output> {
     fn execute(&mut self, input: Input) -> Output;
@@ -78,15 +78,15 @@ impl<T: Add<Output = T> + Copy> PipelineElement<T, T> for Sum<T> {
 //     };
 // }
 
-macro_rules! pipeline {
-    ($x:expr) => {
-        $x.execute(0)
-    };
+// macro_rules! pipeline {
+//     ($x:expr) => {
+//         $x.execute(0)
+//     };
 
-    ($x:expr => $($y:expr) => +) => {
-        $x.execute(pipeline!($($y)=>*))
-    }
-}
+//     ($x:expr => $($y:expr) => +) => {
+//         $x.execute(pipeline!($($y)=>*))
+//     }
+// }
 
 pub fn test_pipeline() -> f32 {
     let mut x = ClosurePipeline::new(|x: isize| x+1);
@@ -107,7 +107,7 @@ pub fn test_pipeline() -> f32 {
     //let mut pipeline = pipeline!(x => ConvertToFloat => DivideByPi);
 
     // THIS IS THE WRONG ORDER. MODIFY THE MACRO SO THAT IT READS FROM LEFT TO RIGHT like on the line above
-    let mut pipeline = pipeline!(DivideByPi => ConvertToFloat => x);
+    macros::pipeline!(DivideByPi => ConvertToFloat => x);
 
     //return pipeline(10);
     0.0
