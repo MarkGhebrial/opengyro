@@ -13,6 +13,8 @@ use dsmrx::*;
 mod timer;
 use timer::*;
 
+mod pipeline;
+
 use ufmt::*;
 use ufmt_float::*;
 
@@ -163,8 +165,6 @@ fn main() -> ! {
 
     print(b"Enabled gyro\n");
 
-    
-
     let mut dsm_rx = DsmRx::new();
     let mut latest_frame: Option<DsmInternalFrame> = None;
 
@@ -211,8 +211,10 @@ fn main() -> ! {
         let y = uFmt_f32::Five(imu.read_gyro_y().unwrap());
         let z = uFmt_f32::Five(imu.read_gyro_z().unwrap());
 
-        uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
+        uwriteln!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
 
         //delay.delay_ms(5u32);
+
+        uwriteln!(UsbSerialWriter, "Pipeline output: {}", uFmt_f32::Five(pipeline::test_pipeline())).unwrap()
     }
 }
