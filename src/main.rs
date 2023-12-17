@@ -114,6 +114,8 @@ fn main() -> ! {
         &mut clocks,
     );
 
+    myhal::servos::ServoController::new([pwm.servo3, pwm.servo2, pwm.servo4]);
+
     print(b"Configured PWM\n");
 
     let uart = feather_m4::uart(
