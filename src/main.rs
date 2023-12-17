@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
 
+pub mod myhal;
+use myhal::servos::Servo;
+
 mod feather_pwm;
 use feather_pwm::*;
 
@@ -163,8 +166,6 @@ fn main() -> ! {
 
     print(b"Enabled gyro\n");
 
-    
-
     let mut dsm_rx = DsmRx::new();
     let mut latest_frame: Option<DsmInternalFrame> = None;
 
@@ -201,7 +202,8 @@ fn main() -> ! {
                     servo.get_us()
                 )
                 .unwrap();
-                pwm.set_channel_us(servo.channel_id, servo.get_us());
+                //pwm.set_channel_us(servo.channel_id, servo.get_us());
+                pwm.servo1.set_us(servo.get_us());
             }
         }
         print(b"\n");
