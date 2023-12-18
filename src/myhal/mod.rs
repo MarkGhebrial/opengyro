@@ -1,2 +1,3 @@
-mod reciever;
+pub mod reciever;
+
 pub mod servos;

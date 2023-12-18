@@ -3,6 +3,7 @@
 
 pub mod myhal;
 use myhal::servos::Servo;
+use myhal::reciever::Reciever;
 
 mod feather_pwm;
 use feather_pwm::*;
@@ -169,7 +170,6 @@ fn main() -> ! {
     print(b"Enabled gyro\n");
 
     let mut dsm_rx = DsmRx::new();
-    let mut latest_frame: Option<DsmInternalFrame> = None;
 
     loop {
         //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
@@ -183,11 +183,6 @@ fn main() -> ! {
             let bytes = rx_buffer.clone();
             for byte in bytes {
                 dsm_rx.handle_serial_event(byte);
-                if dsm_rx.frame_is_avaliable() {
-                    let frame = dsm_rx.parse_frame();
-                    latest_frame = Some(frame);
-                    //uwriteln!(UsbSerialWriter, "{:?}", frame).unwrap();
-                }
             }
             //uwriteln!(UsbSerialWriter, "Buff idx: {}", dsm_rx.buffer_index).unwrap();
 
@@ -195,17 +190,17 @@ fn main() -> ! {
         }
 
         uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
-        if let Some(ref frame) = latest_frame {
-            for servo in frame.servos {
+        if dsm_rx.has_new_data() {
+            for (i, us) in dsm_rx.get_channels().iter().enumerate() {
                 uwrite!(
                     UsbSerialWriter,
                     "{} -> {}us; ",
-                    servo.channel_id,
-                    servo.get_us()
+                    i,
+                    us
                 )
                 .unwrap();
                 //pwm.set_channel_us(servo.channel_id, servo.get_us());
-                pwm.servo1.set_us(servo.get_us());
+                pwm.servo1.set_us(*us);
             }
         }
         print(b"\n");
