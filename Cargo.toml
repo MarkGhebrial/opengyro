@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
-feather_m4 = { version = "0.11.0", features = ["unproven", "usb"] }
+feather_m4 = { version = "0.11.0", features = ["unproven", "usb", "dma"] }
 panic-halt = "0.2.0"
 fugit = "0.3.7"
 usb-device = "0.2.9"
@@ -17,6 +17,8 @@ heapless = "0.7.16"
 ufmt = "0.2.0"
 embedded-hal = "0.2.7"
 nb = "1.1.0"
+icm20948_driver = { git = "https://github.com/MarkGhebrial/icm20948_driver.git", branch = "panic_probe" }
+ufmt_float = "0.2.0"
 
 # Uncomment for the panic example.
 # panic-itm = "0.4.1"

@@ -1,46 +1,38 @@
 #![no_std]
 #![no_main]
 
+pub mod myhal;
+use myhal::servos::Servo;
+use myhal::reciever::Reciever;
+
 mod feather_pwm;
-use cortex_m::peripheral::NVIC;
-use feather_m4::hal::time::Hertz;
 use feather_pwm::*;
 
 mod usb_serial;
 use usb_serial::*;
 
 mod dsmrx;
+use dsmrx::*;
+
 mod timer;
 use timer::*;
 
 use ufmt::*;
+use ufmt_float::*;
 
-use hal::clock::GenericClockController;
-use hal::timer::TimerCounter;
-
-use hal::delay::Delay;
+use feather_m4::hal;
 use hal::prelude::*;
 
-use hal::sercom::uart::Status;
+use hal::clock::GenericClockController;
+use hal::delay::Delay;
+use hal::dmac::*;
 
-use feather_m4::pac::interrupt;
-
-use embedded_hal::serial::Read;
-use nb;
+use icm20948::i2c as icm_i2c;
+use icm20948_driver::icm20948;
 
 use panic_halt as _;
 
-//use cortex_m::asm;
-//use cortex_m_rt::entry;
 use feather_m4::entry;
-use feather_m4::hal;
-use hal::fugit::RateExtU32;
-
-use hal::sercom::uart::Flags;
-
-use cortex_m_rt::exception;
-
-// use hal::sercom::{uart, IoSet1};
 
 #[entry]
 fn main() -> ! {
@@ -57,6 +49,11 @@ fn main() -> ! {
         &mut peripherals.NVMCTRL,
     );
     let mut delay = Delay::new(core_peripherals.SYST, &mut clocks);
+
+    let mut dmac = DmaController::init(peripherals.DMAC, &mut peripherals.PM);
+    let channels = dmac.split();
+    //let chan0 = channels.0.init(PriorityLevel::LVL0);
+    let chan1 = channels.1.init(PriorityLevel::LVL0);
 
     let pins = feather_m4::Pins::new(peripherals.PORT);
 
@@ -104,7 +101,7 @@ fn main() -> ! {
 
     print(b"Done blinking\n");
 
-    let pwm = FeatherPwm::init(
+    let mut pwm = FeatherPwm::init(
         pins.d5,
         pins.d6,
         pins.d9,
@@ -118,9 +115,11 @@ fn main() -> ! {
         &mut clocks,
     );
 
+    //myhal::servos::ServoController::new([pwm.servo3, pwm.servo2, pwm.servo4]);
+
     print(b"Configured PWM\n");
 
-    let mut uart = feather_m4::uart(
+    let uart = feather_m4::uart(
         &mut clocks,
         115200.Hz(),
         peripherals.SERCOM5,
@@ -134,18 +133,23 @@ fn main() -> ! {
     // config.set_bit_order(hal::sercom::uart::BitOrder::MsbFirst);
     // uart = config.enable();
 
-    unsafe {
-        // interrupt must be enabled and unmasked in the NVIC
-        // (Nested Vector Interrupt Controller) peripheral
-        core_peripherals.NVIC.set_priority(interrupt::SERCOM5_2, 1);
-        NVIC::unmask(interrupt::SERCOM5_2);
-    }
+    const LENGTH: usize = 16;
+    let rx_buffer: &'static mut [u8; LENGTH] =
+        cortex_m::singleton!(: [u8; LENGTH] = [0x00; LENGTH]).unwrap();
 
-    uart.enable_interrupts(Flags::RXC);
+    // // Read bits from the UART until there's a gap of more than 10ms
+    // // This ensures that each dma transfer contains a full dsm frame
+    let mut timer = UpTimer::new();
+    // while timer.elapsed_ms() < 10 {
+    //     timer.reset();
+    //     nb::block!(uart.read()).unwrap();
+    // }
+    // for _ in 0..15 {
+    //     nb::block!(uart.read()).unwrap();
+    // }
 
-    unsafe {
-        UART = Some(uart);
-    }
+    let waker = |_| {};
+    let mut rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
 
     print(b"Configured UART\n");
 
@@ -158,123 +162,81 @@ fn main() -> ! {
         pins.scl,
     );
 
-    print(b"Configured I2C\n");
+    print(b"Configured I2C peripheral\n");
 
-    //let (mut rx, _tx) = uart.split();
+    let imu = icm_i2c::IcmImu::new(i2c, 0x69 /* Nice */);
+    let mut imu = match imu {
+        Ok(imu) => Some(imu),
+        Err(e) => {
+            print(b"Error!!!");
+            None
+        }
+    };
+    print(b"Configured IMU object\n");
 
-    // let mut duty = tcc0pwm.get_max_duty();
-    // //tcc1pwm.enable(hal::pwm::Channel::_0);
-    // tcc0pwm.enable(hal::pwm::Channel::_3);
+    if let Some(ref mut imu) = imu {
+        imu.enable_gyro().ok();
+    }
 
-    let mut dsm_rx = dsmrx::DsmRx::new();
+    print(b"Enabled gyro\n");
+
+    let mut dsm_rx = DsmRx::new();
 
     loop {
-        uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
-        delay.delay_ms(5u32);
+        //uwriteln!(UsbSerialWriter, "Main loop: {}", elapsed_ms()).unwrap();
 
-        // print(b"Reading from UART... ");
+        //uwriteln!(UsbSerialWriter, "dma complete: {}", rx_dma.complete()).unwrap();
+        if rx_dma.complete() {
+            let (chan1, uart, rx_buffer) = rx_dma.wait();
+            //uwriteln!(UsbSerialWriter, "Elapsed: {}ms {:?}", timer.elapsed_ms(), rx_buffer).unwrap();
+            timer.reset();
 
-        // //uart.flush_rx_buffer();
-
-        // // let mut buf = [0u8; 17];
-
-        // // for c in buf.iter_mut() {
-        // //     match nb::block!(uart.read()) {
-        // //         Ok(byte) => *c = byte,
-        // //         Err(e) => {
-        // //             match e {
-        // //                 hal::sercom::uart::Error::FrameError => {
-        // //                     uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
-        // //                     uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
-        // //                 }
-        // //                 hal::sercom::uart::Error::Overflow => {
-        // //                     uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
-        // //                     uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
-        // //                 }
-        // //                 _ => print(b"Other error\n"),
-        // //             };
-        // //         }
-        // //     }
-        // // }
-
-        // while dsm_rx.buffer_index < 13 {
-        //     let byte = loop {
-        //         match nb::block!(uart.read()) {
-        //             Ok(byte) => break byte,
-        //             Err(hal::sercom::uart::Error::Overflow) => {
-        //                 uwriteln!(UsbSerialWriter, "Overflow error!").unwrap();
-        //                 uart.clear_status(hal::sercom::uart::Status::BUFOVF); // Clear the error flag
-        //             }
-        //             Err(hal::sercom::uart::Error::FrameError) => {
-        //                 uwriteln!(UsbSerialWriter, "Frame error!").unwrap();
-        //                 uart.clear_status(hal::sercom::uart::Status::FERR); // Clear the error flag
-        //             }
-        //             //Err(hal::sercom::uart::Error)
-        //             _ => print(b"Other error\n"),
-        //         }
-        //     };
-
-        //     dsm_rx.handle_serial_event(byte);
-        //     uwriteln!(UsbSerialWriter, "Buf len: {}", dsm_rx.buffer_index).unwrap();
-        // }
-
-        // print(b"0x");
-        // for c in dsm_rx.buffer.iter() {
-        //     uwrite!(UsbSerialWriter, "{:02x} ", *c).unwrap();
-        // }
-        // print(b"\n");
-
-        // let frame = dsm_rx.parse_frame();
-        // uwriteln!(UsbSerialWriter, "{:?}", frame).unwrap();
-    }
-}
-
-#[exception]
-unsafe fn DefaultHandler(_i: i16) {
-    print(b"ASDFADSFDSAFDASF\n");
-    loop {}
-}
-
-static mut UART: Option<feather_m4::Uart> = None;
-
-#[interrupt]
-fn SERCOM5_2() {
-    uwrite!(UsbSerialWriter, "{}ms -> ", elapsed_ms()).unwrap();
-
-    unsafe {
-        if let Some(uart) = &mut UART {
-            let data: u32 = uart.read_data();
-
-            let mut loops = 0;
-            while uart.read_flags().contains(Flags::RXC) {
-                // print(b"rxc\n");
-                // uart.read_data();
-                loops += 1;
+            let bytes = rx_buffer.clone();
+            for byte in bytes {
+                dsm_rx.handle_serial_event(byte);
             }
+            //uwriteln!(UsbSerialWriter, "Buff idx: {}", dsm_rx.buffer_index).unwrap();
 
-            let status = uart.read_status();
-            let buffovf = status.contains(hal::sercom::uart::Status::BUFOVF);
-            let ferr = status.contains(hal::sercom::uart::Status::FERR);
-
-            uart.clear_status(Status::all());
-
-            uwriteln!(
-                UsbSerialWriter,
-                "Status: {:#x}, Buffovf: {}, Ferr: {}, Loops {}",
-                status.bits(),
-                buffovf,
-                ferr,
-                loops
-            )
-            .unwrap();
-
-            let bytes: [u8; 4] = data.to_be_bytes();
-
-            uwriteln!(UsbSerialWriter, "Recieved data {:?}", bytes).unwrap();
-
-            // for b in bytes.iter() {
-            //     uwriteln!(UsbSerialWriter, "Recieved byte {:#x}", data).unwrap();
-            // }
+            rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
+
+        uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
+        if dsm_rx.has_new_data() {
+            for (i, us) in dsm_rx.get_channels().iter().enumerate() {
+                uwrite!(
+                    UsbSerialWriter,
+                    "{} -> {}us; ",
+                    i,
+                    us
+                )
+                .unwrap();
+                //pwm.set_channel_us(servo.channel_id, servo.get_us());
+                match i {
+                    0 => &mut pwm.servo1,
+                    1 => &mut pwm.servo2,
+                    2 => &mut pwm.servo3,
+                    3 => &mut pwm.servo4,
+                    4 => &mut pwm.servo5,
+                    5 => &mut pwm.servo6,
+                    6 => &mut pwm.servo7,
+                    _ => unreachable!(),
+                }.set_us(*us);
+                //pwm.servo1.set_us(*us);
+            }
+        }
+        print(b"\n");
+
+        if let Some(ref mut imu) = imu {
+            if let Ok(readings) = imu.read_gyro() {
+                // Print gyro readings
+                let x = uFmt_f32::Five(readings[0]);
+                let y = uFmt_f32::Five(readings[1]);
+                let z = uFmt_f32::Five(readings[2]);
+
+                uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
+            }
+        }
+
+        //delay.delay_ms(5u32);
     }
 }

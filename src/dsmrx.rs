@@ -1,11 +1,10 @@
-use embedded_hal::serial::Read;
+//use embedded_hal::serial::Read;
 
-use crate::timer::UpTimer;
-use crate::usb_serial::print;
+use crate::{timer::UpTimer, myhal::reciever::Reciever};
 
 #[allow(non_camel_case_types)]
-#[derive(ufmt::derive::uDebug)]
-enum DsmSystem {
+#[derive(ufmt::derive::uDebug, PartialEq, Clone, Copy)]
+pub enum DsmSystem {
     DsmX_11Ms = 0x01,
     DsmX_22Ms = 0x12,
     Dsm2_11Ms = 0xa2,
@@ -31,10 +30,16 @@ pub struct Dsm1024Servo {
     pub position: u16,
 }
 
+impl Dsm1024Servo {
+    pub fn get_us(&self) -> u16 {
+        (self.position as f64 * 1.166) as u16 + 903
+    }
+}
+
 impl From<u16> for Dsm1024Servo {
     fn from(value: u16) -> Self {
         Self {
-            channel_id: ((value & 0xFC00) >> 8) as u8,
+            channel_id: ((value & 0xFC00) >> 10) as u8,
             position: value & 0x03FF,
         }
     }
@@ -46,18 +51,43 @@ impl From<[u8; 2]> for Dsm1024Servo {
     }
 }
 
-#[derive(ufmt::derive::uDebug)]
+#[derive(ufmt::derive::uDebug, Clone, Copy)]
 pub struct DsmInternalFrame {
-    fades: u8,
-    system: DsmSystem,
-    servos: [Dsm1024Servo; 7],
+    pub fades: u8,
+    pub system: DsmSystem,
+    pub servos: [Dsm1024Servo; 7],
+}
+
+impl From<&[u8; 16]> for DsmInternalFrame {
+    fn from(bytes: &[u8; 16]) -> Self {
+        let mut servos: [Dsm1024Servo; 7] = [Dsm1024Servo {
+            channel_id: 0,
+            position: 0,
+        }; 7];
+
+        for i in 1..8 {
+            let index = i * 2 as usize;
+            let servo: [u8; 2] = [bytes[index], bytes[index + 1]];
+
+            servos[i - 1] = Dsm1024Servo::from(servo);
+        }
+
+        Self {
+            fades: bytes[0],
+            system: bytes[1].into(),
+            servos: servos,
+        }
+    }
 }
 
 pub struct DsmRx /*<Rx: Read<u8>>*/ {
     //rx: Option<Rx>,
-    pub buffer: [u8; 20],
+    pub buffer: [u8; 16],
     pub buffer_index: usize,
+    prev_frame: Option<DsmInternalFrame>,
+    has_new_frame: bool,
     timer: UpTimer,
+    failsafe_timer: UpTimer,
 }
 
 impl DsmRx /*<Rx>*/
@@ -65,13 +95,14 @@ impl DsmRx /*<Rx>*/
 //     Rx: Read<u8>,
 {
     pub fn new(/*uart: Option<Rx>*/) -> Self {
-        let timer = UpTimer::new();
-
         DsmRx {
             //rx: uart,
-            buffer: [0; 20],
+            buffer: [0; 16],
             buffer_index: 0,
-            timer,
+            prev_frame: None,
+            has_new_frame: false,
+            timer: UpTimer::new(),
+            failsafe_timer: UpTimer::new(),
         }
     }
 
@@ -88,47 +119,69 @@ impl DsmRx /*<Rx>*/
 
     fn clear_buffer(&mut self) {
         self.buffer_index = 0;
-        self.buffer = [0; 20];
+        self.buffer = [0; 16];
     }
 
+    /// Handle a byte from the UART.
+    /// 
+    /// You must call this function when a new byte is recieved.
     pub fn handle_serial_event(&mut self, byte: u8) {
-        ufmt::uwriteln!(
-            crate::UsbSerialWriter,
-            "Elapsed ms: {}",
-            self.timer.elapsed_ms()
-        )
-        .unwrap();
-
         if self.timer.elapsed_ms() > 17 {
             self.clear_buffer();
         }
+        // if DsmSystem::from(byte) != DsmSystem::Invalid && self.buffer_index >= 1 {
+        //     self.buffer[0] = self.buffer[self.buffer_index - 1];
+        //     self.buffer_index = 1;
+        // }
 
         self.buffer[self.buffer_index] = byte;
         self.buffer_index += 1;
         self.timer.reset();
+
+        if self.frame_is_avaliable() {
+            self.prev_frame = Some(DsmInternalFrame::from(&self.buffer));
+            self.has_new_frame = true;
+            self.clear_buffer();
+
+            self.failsafe_timer.reset();
+        }
     }
 
-    pub fn parse_frame(&mut self) -> DsmInternalFrame {
-        let mut servos: [Dsm1024Servo; 7] = [Dsm1024Servo {
-            channel_id: 0,
-            position: 0,
-        }; 7];
+    pub fn frame_is_avaliable(&self) -> bool {
+        self.buffer_index >= 16
+    }
 
-        for i in 1..8 {
-            let index = i * 2 as usize;
-            let servo = [self.buffer[index], self.buffer[index + 1]];
+    pub fn get_frame(&mut self) -> Option<DsmInternalFrame> {
+        self.has_new_frame = false;
+        self.prev_frame
+    }
+}
 
-            servos[i - 1] = Dsm1024Servo::from(servo);
+impl Reciever<7> for DsmRx {
+    fn has_new_data(&self) -> bool {
+        self.has_new_frame
+    }
+
+    // TODO: Converting a DsmInternalFrame to an array of ints isn't super fast. Cache the result instead
+    // so that we don't waste computing time when a user calls this funtion continuously
+    fn get_channels(&mut self) -> [u16; 7] {
+        let mut out = [1500; 7]; // We set the default array value as 1500us so that the servos are centered until a frame has been recieved
+        out[0] = 0; // We set the first element in the array to 0us since we don't want the throttle to move until a frame has been recieved
+
+        if let Some(frame) = &self.prev_frame {
+            for s in &frame.servos {
+                out[s.channel_id as usize] = s.get_us();
+            }
         }
 
-        let frame = DsmInternalFrame {
-            fades: self.buffer[0],
-            system: self.buffer[1].into(),
-            servos: servos,
-        };
+        self.has_new_frame = false;
 
-        self.clear_buffer();
+        out
+    }
 
-        frame
+    fn is_in_failsafe(&self) -> bool {
+        // Spektrum's satellite reciever spec advises that the flight controller should
+        // enter failsafe mode after not recieving a frame for longer than one second
+        self.failsafe_timer.elapsed_ms() > 1000
     }
 }
