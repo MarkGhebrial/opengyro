@@ -1,6 +1,5 @@
 /// Future me is going to forget what all of this is for.
 /// Present me needs to document this so that future me can make sense of it
-
 use embedded_hal::Pwm;
 use feather_m4::hal;
 use feather_m4::pac;

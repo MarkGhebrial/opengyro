@@ -3,13 +3,11 @@ pub trait Servo {
 }
 
 pub struct ServoController<const N: usize, T: Servo> {
-    servos: [T; N]
+    servos: [T; N],
 }
 
 impl<const N: usize, T: Servo> ServoController<N, T> {
     pub fn new(servos: [T; N]) -> Self {
-        Self {
-            servos
-        }
+        Self { servos }
     }
 }

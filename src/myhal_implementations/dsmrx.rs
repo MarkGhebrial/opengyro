@@ -1,6 +1,6 @@
 //use embedded_hal::serial::Read;
 
-use crate::{timer::UpTimer, myhal::reciever::Reciever};
+use crate::{myhal::reciever::Reciever, timer::UpTimer};
 
 #[allow(non_camel_case_types)]
 #[derive(ufmt::derive::uDebug, PartialEq, Clone, Copy)]
@@ -123,7 +123,7 @@ impl DsmRx /*<Rx>*/
     }
 
     /// Handle a byte from the UART.
-    /// 
+    ///
     /// You must call this function when a new byte is recieved.
     pub fn handle_serial_event(&mut self, byte: u8) {
         if self.timer.elapsed_ms() > 17 {

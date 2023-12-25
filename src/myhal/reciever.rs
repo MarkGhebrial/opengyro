@@ -4,7 +4,7 @@ pub trait Reciever<const NUM_CHANNELS: usize> {
     fn has_new_data(&self) -> bool;
 
     /// Return an array of the PWM pulse width for each channel (in microseconds)
-    /// 
+    ///
     /// Calling this function will make `has_new_data()` return false until another
     /// packet is recieved from the transmitter
     fn get_channels(&mut self) -> [u16; NUM_CHANNELS];

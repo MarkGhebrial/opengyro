@@ -2,17 +2,17 @@
 #![no_main]
 
 pub mod myhal;
-use myhal::servos::Servo;
 use myhal::reciever::Reciever;
+use myhal::servos::Servo;
+
+mod myhal_implementations;
+use myhal_implementations::*;
 
 mod feather_pwm;
 use feather_pwm::*;
 
 mod usb_serial;
 use usb_serial::*;
-
-mod dsmrx;
-use dsmrx::*;
 
 mod timer;
 use timer::*;
@@ -203,13 +203,7 @@ fn main() -> ! {
         uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
         if dsm_rx.has_new_data() {
             for (i, us) in dsm_rx.get_channels().iter().enumerate() {
-                uwrite!(
-                    UsbSerialWriter,
-                    "{} -> {}us; ",
-                    i,
-                    us
-                )
-                .unwrap();
+                uwrite!(UsbSerialWriter, "{} -> {}us; ", i, us).unwrap();
                 //pwm.set_channel_us(servo.channel_id, servo.get_us());
                 match i {
                     0 => &mut pwm.servo1,
@@ -220,7 +214,8 @@ fn main() -> ! {
                     5 => &mut pwm.servo6,
                     6 => &mut pwm.servo7,
                     _ => unreachable!(),
-                }.set_us(*us);
+                }
+                .set_us(*us);
                 //pwm.servo1.set_us(*us);
             }
         }
