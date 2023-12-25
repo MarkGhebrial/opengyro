@@ -89,7 +89,10 @@ static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 pub fn print(bytes: &[u8]) {
     disable_interrupts(|_| unsafe {
         if let Some(usb_serial) = USB_SERIAL.as_mut() {
-            usb_serial.write(bytes).unwrap();
+            if usb_serial.dtr() { // TODO: Double check if this condition is required. I added it to prevent buffer overflow when a usb cable is not connected
+                usb_serial.write(bytes).unwrap();
+            }
+            
         }
     });
 }

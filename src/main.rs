@@ -115,7 +115,7 @@ fn main() -> ! {
         &mut clocks,
     );
 
-    myhal::servos::ServoController::new([pwm.servo3, pwm.servo2, pwm.servo4]);
+    //myhal::servos::ServoController::new([pwm.servo3, pwm.servo2, pwm.servo4]);
 
     print(b"Configured PWM\n");
 
@@ -164,8 +164,19 @@ fn main() -> ! {
 
     print(b"Configured I2C peripheral\n");
 
-    let mut imu = icm_i2c::IcmImu::new(i2c, 0x69).unwrap();
-    imu.enable_gyro().unwrap();
+    let imu = icm_i2c::IcmImu::new(i2c, 0x69 /* Nice */);
+    let mut imu = match imu {
+        Ok(imu) => Some(imu),
+        Err(e) => {
+            print(b"Error!!!");
+            None
+        }
+    };
+    print(b"Configured IMU object\n");
+
+    if let Some(ref mut imu) = imu {
+        imu.enable_gyro().ok();
+    }
 
     print(b"Enabled gyro\n");
 
@@ -200,17 +211,31 @@ fn main() -> ! {
                 )
                 .unwrap();
                 //pwm.set_channel_us(servo.channel_id, servo.get_us());
-                pwm.servo1.set_us(*us);
+                match i {
+                    0 => &mut pwm.servo1,
+                    1 => &mut pwm.servo2,
+                    2 => &mut pwm.servo3,
+                    3 => &mut pwm.servo4,
+                    4 => &mut pwm.servo5,
+                    5 => &mut pwm.servo6,
+                    6 => &mut pwm.servo7,
+                    _ => unreachable!(),
+                }.set_us(*us);
+                //pwm.servo1.set_us(*us);
             }
         }
         print(b"\n");
 
-        // Print gyro readings
-        let x = uFmt_f32::Five(imu.read_gyro_x().unwrap());
-        let y = uFmt_f32::Five(imu.read_gyro_y().unwrap());
-        let z = uFmt_f32::Five(imu.read_gyro_z().unwrap());
+        if let Some(ref mut imu) = imu {
+            if let Ok(readings) = imu.read_gyro() {
+                // Print gyro readings
+                let x = uFmt_f32::Five(readings[0]);
+                let y = uFmt_f32::Five(readings[1]);
+                let z = uFmt_f32::Five(readings[2]);
 
-        uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
+                uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
+            }
+        }
 
         //delay.delay_ms(5u32);
     }

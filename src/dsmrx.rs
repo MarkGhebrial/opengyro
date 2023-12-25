@@ -162,7 +162,7 @@ impl Reciever<7> for DsmRx {
         self.has_new_frame
     }
 
-    // TODO: Converting a DsmInternalFrame to and array of ints isn't super fast. Cache the result instead
+    // TODO: Converting a DsmInternalFrame to an array of ints isn't super fast. Cache the result instead
     // so that we don't waste computing time when a user calls this funtion continuously
     fn get_channels(&mut self) -> [u16; 7] {
         let mut out = [1500; 7]; // We set the default array value as 1500us so that the servos are centered until a frame has been recieved
