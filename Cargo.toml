@@ -17,7 +17,7 @@ heapless = "0.7.16"
 ufmt = "0.2.0"
 embedded-hal = "0.2.7"
 nb = "1.1.0"
-icm20948_driver = { git = "https://github.com/MarkGhebrial/icm20948_driver.git", branch = "panic_probe" }
+icm20948_driver = { git = "https://github.com/MarkGhebrial/icm20948_driver.git", branch = "bugfixes" }
 ufmt_float = "0.2.0"
 nalgebra = { version = "0.31", default-features = false }
 ahrs = { version = "0.6.0", default-features = false }

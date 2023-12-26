@@ -4,6 +4,7 @@
 pub mod myhal;
 use myhal::reciever::Reciever;
 use myhal::servos::Servo;
+use myhal::imu::*;
 
 mod myhal_implementations;
 use myhal_implementations::*;
@@ -28,7 +29,7 @@ use hal::delay::Delay;
 use hal::dmac::*;
 
 use icm20948::i2c as icm_i2c;
-use icm20948_driver::icm20948;
+use icm20948_driver::icm20948::{self, IcmError};
 
 use panic_halt as _;
 
@@ -168,15 +169,34 @@ fn main() -> ! {
     let mut imu = match imu {
         Ok(imu) => Some(imu),
         Err(e) => {
-            print(b"Error!!!");
+            print(b"Error: ");
+            match e {
+                IcmError::BusError(e) => {
+                    print(b"Bus Error: ");
+
+                    match e {
+                        hal::sercom::i2c::Error::BusError => print(b"BusError"),
+                        hal::sercom::i2c::Error::ArbitrationLost => print(b"ArbitrationLost"),
+                        hal::sercom::i2c::Error::LengthError => print(b"LengthError"),
+                        hal::sercom::i2c::Error::Nack => print(b"Nack"),
+                        hal::sercom::i2c::Error::Timeout => print(b"Timeout"),
+                    }
+                },
+                IcmError::InvalidInput => print(b"Invalid input\n"),
+            }
             None
         }
     };
     print(b"Configured IMU object\n");
 
     if let Some(ref mut imu) = imu {
+        imu.set_gyro_sen(icm20948::GyroSensitivity::Sen500dps).ok();
         imu.enable_gyro().ok();
+        imu.set_acc_sen(icm20948::AccSensitivity::Sen4g).ok();
+        imu.enable_acc().ok();
     }
+
+    let mut imu = myhal::imu::IMU::new(imu.unwrap());
 
     print(b"Enabled gyro\n");
 
@@ -204,7 +224,6 @@ fn main() -> ! {
         if dsm_rx.has_new_data() {
             for (i, us) in dsm_rx.get_channels().iter().enumerate() {
                 uwrite!(UsbSerialWriter, "{} -> {}us; ", i, us).unwrap();
-                //pwm.set_channel_us(servo.channel_id, servo.get_us());
                 match i {
                     0 => &mut pwm.servo1,
                     1 => &mut pwm.servo2,
@@ -216,21 +235,27 @@ fn main() -> ! {
                     _ => unreachable!(),
                 }
                 .set_us(*us);
-                //pwm.servo1.set_us(*us);
             }
         }
         print(b"\n");
 
-        if let Some(ref mut imu) = imu {
-            if let Ok(readings) = imu.read_gyro() {
-                // Print gyro readings
-                let x = uFmt_f32::Five(readings[0]);
-                let y = uFmt_f32::Five(readings[1]);
-                let z = uFmt_f32::Five(readings[2]);
-
-                uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {}", x, y, z).unwrap();
-            }
+        // Update the filter
+        if timer.elapsed_ms() >= 10 {
+            //uwriteln!(UsbSerialWriter, "Updating filter: {}ms elapsed ", timer.elapsed_ms()).unwrap();
+            imu.update();
+            timer.reset();
         }
+
+        //if let Some(ref mut imu) = imu {
+            let gyro_readings = imu.get_rotations();
+            
+            // Print gyro readings           
+            let x = uFmt_f64::Five(gyro_readings.0 * (180.0 / core::f64::consts::PI));
+            let y = uFmt_f64::Five(gyro_readings.1 * (180.0 / core::f64::consts::PI));
+            let z = uFmt_f64::Five(gyro_readings.2 * (180.0 / core::f64::consts::PI));
+
+            uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {} ", x, y, z).unwrap();
+        //}
 
         //delay.delay_ms(5u32);
     }

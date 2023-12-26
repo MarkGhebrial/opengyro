@@ -305,7 +305,7 @@ dependencies = [
 [[package]]
 name = "icm20948_driver"
 version = "0.2.0"
-source = "git+https://github.com/MarkGhebrial/icm20948_driver.git?branch=panic_probe#01858aa876e23bc7537b0725dd251c249c4a6a92"
+source = "git+https://github.com/MarkGhebrial/icm20948_driver.git?branch=bugfixes#c16104d53e3019c7341e2ec6d9ef7f75f7fd6849"
 dependencies = [
  "defmt",
  "defmt-rtt",

@@ -1,8 +1,9 @@
 use ahrs::{Ahrs, Madgwick};
 use nalgebra as na;
+use core::f64::consts::PI;
 
 pub trait Gyro {
-    /// Get the measured angular rates in radians per second
+    /// Get the measured angular rates in degrees per second
     fn get_angular_rates(&mut self) -> na::Vector3<f64>;
 
     // fn get_x(&mut self) -> f64;
@@ -25,7 +26,7 @@ pub trait Orientation {
     fn get_rotations(&mut self) -> (f64, f64, f64);
 }
 
-struct IMU<T: Gyro + Accelerometer> {
+pub struct IMU<T: Gyro + Accelerometer> {
     pub imu: T,
     filter: Madgwick<f64>,
 }
@@ -34,13 +35,13 @@ impl<T: Gyro + Accelerometer> IMU<T> {
     pub fn new(imu: T) -> Self {
         Self {
             imu,
-            filter: Madgwick::default(),
+            filter: Madgwick::new(0.01, 0.2),
         }
     }
 
     pub fn update(&mut self) {
-        let angular_rates = self.get_angular_rates();
-        let accelerations = self.get_accelerations();
+        let angular_rates = self.get_angular_rates() * (PI / 180.0);
+        let accelerations = self.get_accelerations() * 9.8;
         self.filter.update_imu(&angular_rates, &accelerations).ok();
     }
 }
