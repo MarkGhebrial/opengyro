@@ -2,9 +2,9 @@
 #![no_main]
 
 pub mod myhal;
+use myhal::imu::*;
 use myhal::reciever::Reciever;
 use myhal::servos::Servo;
-use myhal::imu::*;
 
 mod myhal_implementations;
 use myhal_implementations::*;
@@ -181,7 +181,7 @@ fn main() -> ! {
                         hal::sercom::i2c::Error::Nack => print(b"Nack"),
                         hal::sercom::i2c::Error::Timeout => print(b"Timeout"),
                     }
-                },
+                }
                 IcmError::InvalidInput => print(b"Invalid input\n"),
             }
             None
@@ -246,16 +246,14 @@ fn main() -> ! {
             timer.reset();
         }
 
-        //if let Some(ref mut imu) = imu {
-            let gyro_readings = imu.get_rotations();
-            
-            // Print gyro readings           
-            let x = uFmt_f64::Five(gyro_readings.0 * (180.0 / core::f64::consts::PI));
-            let y = uFmt_f64::Five(gyro_readings.1 * (180.0 / core::f64::consts::PI));
-            let z = uFmt_f64::Five(gyro_readings.2 * (180.0 / core::f64::consts::PI));
+        let gyro_readings = imu.get_rotations();
 
-            uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {} ", x, y, z).unwrap();
-        //}
+        // Print gyro readings
+        let x = uFmt_f64::Five(gyro_readings.0 * (180.0 / core::f64::consts::PI));
+        let y = uFmt_f64::Five(gyro_readings.1 * (180.0 / core::f64::consts::PI));
+        let z = uFmt_f64::Five(gyro_readings.2 * (180.0 / core::f64::consts::PI));
+
+        uwrite!(UsbSerialWriter, "Gyro x: {}, y: {}, z: {} ", x, y, z).unwrap();
 
         //delay.delay_ms(5u32);
     }

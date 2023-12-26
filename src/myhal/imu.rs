@@ -1,6 +1,6 @@
 use ahrs::{Ahrs, Madgwick};
-use nalgebra as na;
 use core::f64::consts::PI;
+use nalgebra as na;
 
 pub trait Gyro {
     /// Get the measured angular rates in degrees per second
