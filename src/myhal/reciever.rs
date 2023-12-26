@@ -9,6 +9,12 @@ pub trait Reciever<const NUM_CHANNELS: usize> {
     /// packet is recieved from the transmitter
     fn get_channels(&mut self) -> [u16; NUM_CHANNELS];
 
+    /// Return the minimum microsecond value for the specified channel
+    fn get_channel_min(&self, ch_num: usize) -> u16;
+
+    /// Return the maximum microsecond value for the specified channel
+    fn get_channel_max(&self, ch_num: usize) -> u16;
+
     /// Returns true if the reciever has lost connection with the transmitter
     /// and has entered failsafe mode
     fn is_in_failsafe(&self) -> bool;

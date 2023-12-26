@@ -5,6 +5,7 @@ pub mod myhal;
 use myhal::imu::*;
 use myhal::reciever::Reciever;
 use myhal::servos::Servo;
+use myhal::servos::ServoController;
 
 mod myhal_implementations;
 use myhal_implementations::*;
@@ -116,7 +117,7 @@ fn main() -> ! {
         &mut clocks,
     );
 
-    //myhal::servos::ServoController::new([pwm.servo3, pwm.servo2, pwm.servo4]);
+    let mut servos = ServoController::new([pwm.servo1, pwm.servo2, pwm.servo3, pwm.servo4, pwm.servo5, pwm.servo6, pwm.servo7]);
 
     print(b"Configured PWM\n");
 
@@ -220,22 +221,19 @@ fn main() -> ! {
             rx_dma = uart.receive_with_dma(rx_buffer, chan1, waker);
         }
 
+        uwrite!(UsbSerialWriter, "Failsafe: {};", dsm_rx.is_in_failsafe()).unwrap();
+
+        uwrite!(UsbSerialWriter, "Channel mins:").ok();
+        for ch in 0..7 {
+            uwrite!(UsbSerialWriter, " {}", dsm_rx.get_channel_min(ch)).ok();
+        }
+        print(b"; ");
+
         uwrite!(UsbSerialWriter, "Setting channels: ").unwrap();
         if dsm_rx.has_new_data() {
-            for (i, us) in dsm_rx.get_channels().iter().enumerate() {
-                uwrite!(UsbSerialWriter, "{} -> {}us; ", i, us).unwrap();
-                match i {
-                    0 => &mut pwm.servo1,
-                    1 => &mut pwm.servo2,
-                    2 => &mut pwm.servo3,
-                    3 => &mut pwm.servo4,
-                    4 => &mut pwm.servo5,
-                    5 => &mut pwm.servo6,
-                    6 => &mut pwm.servo7,
-                    _ => unreachable!(),
-                }
-                .set_us(*us);
-            }
+            uwrite!(UsbSerialWriter, "{:?} ", dsm_rx.get_channels()).unwrap();
+
+            servos.set_servo_us(dsm_rx.get_channels());
         }
         print(b"\n");
 

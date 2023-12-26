@@ -88,6 +88,9 @@ pub struct DsmRx /*<Rx: Read<u8>>*/ {
     has_new_frame: bool,
     timer: UpTimer,
     failsafe_timer: UpTimer,
+
+    channel_mins: [u16; 7],
+    channel_maxes: [u16; 7],
 }
 
 impl DsmRx /*<Rx>*/
@@ -103,6 +106,8 @@ impl DsmRx /*<Rx>*/
             has_new_frame: false,
             timer: UpTimer::new(),
             failsafe_timer: UpTimer::new(),
+            channel_mins: [10000; 7],
+            channel_maxes: [0; 7],
         }
     }
 
@@ -139,7 +144,35 @@ impl DsmRx /*<Rx>*/
         self.timer.reset();
 
         if self.frame_is_avaliable() {
-            self.prev_frame = Some(DsmInternalFrame::from(&self.buffer));
+
+            let new_frame = DsmInternalFrame::from(&self.buffer);
+
+            // Set the maxes and minimums for each channel
+            if self.prev_frame.is_none() {
+                // If this is the first frame that we recieve, then set the initial mins and maxes for each channel
+                for servo in new_frame.servos.iter() {
+                    if servo.channel_id > 7 { continue; } // Prevent out-of-bounds access
+
+                    self.channel_mins[servo.channel_id as usize] = servo.get_us();
+                    self.channel_maxes[servo.channel_id as usize] = servo.get_us();
+                }
+            } else {
+                // Adjust our min and max values for each channel
+                for servo in new_frame.servos.iter() {
+                    if servo.channel_id > 7 { continue; } // Prevent out-of-bounds access
+                    let ch = servo.channel_id as usize;
+
+                    if self.channel_mins[ch] > servo.get_us() {
+                        self.channel_mins[ch] = servo.get_us();
+                    }
+
+                    if self.channel_maxes[ch] < servo.get_us() {
+                        self.channel_maxes[ch] = servo.get_us();
+                    }
+                }
+            }
+
+            self.prev_frame = Some(new_frame);
             self.has_new_frame = true;
             self.clear_buffer();
 
@@ -183,5 +216,13 @@ impl Reciever<7> for DsmRx {
         // Spektrum's satellite reciever spec advises that the flight controller should
         // enter failsafe mode after not recieving a frame for longer than one second
         self.failsafe_timer.elapsed_ms() > 1000
+    }
+
+    fn get_channel_min(&self, ch_num: usize) -> u16 {
+        self.channel_mins[ch_num]
+    }
+
+    fn get_channel_max(&self, ch_num: usize) -> u16 {
+        self.channel_maxes[ch_num]
     }
 }
