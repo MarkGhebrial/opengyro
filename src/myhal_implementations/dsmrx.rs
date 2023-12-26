@@ -80,6 +80,7 @@ impl From<&[u8; 16]> for DsmInternalFrame {
     }
 }
 
+// TODO: The dsmrx protocol actually supports up to 11 channels. My code will probably not work with a transmitter that has more than 7 channels
 pub struct DsmRx /*<Rx: Read<u8>>*/ {
     //rx: Option<Rx>,
     pub buffer: [u8; 16],
@@ -144,14 +145,15 @@ impl DsmRx /*<Rx>*/
         self.timer.reset();
 
         if self.frame_is_avaliable() {
-
             let new_frame = DsmInternalFrame::from(&self.buffer);
 
             // Set the maxes and minimums for each channel
             if self.prev_frame.is_none() {
                 // If this is the first frame that we recieve, then set the initial mins and maxes for each channel
                 for servo in new_frame.servos.iter() {
-                    if servo.channel_id > 7 { continue; } // Prevent out-of-bounds access
+                    if servo.channel_id > 7 {
+                        continue;
+                    } // Prevent out-of-bounds access
 
                     self.channel_mins[servo.channel_id as usize] = servo.get_us();
                     self.channel_maxes[servo.channel_id as usize] = servo.get_us();
@@ -159,7 +161,9 @@ impl DsmRx /*<Rx>*/
             } else {
                 // Adjust our min and max values for each channel
                 for servo in new_frame.servos.iter() {
-                    if servo.channel_id > 7 { continue; } // Prevent out-of-bounds access
+                    if servo.channel_id > 7 {
+                        continue;
+                    } // Prevent out-of-bounds access
                     let ch = servo.channel_id as usize;
 
                     if self.channel_mins[ch] > servo.get_us() {

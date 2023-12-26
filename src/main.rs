@@ -117,7 +117,9 @@ fn main() -> ! {
         &mut clocks,
     );
 
-    let mut servos = ServoController::new([pwm.servo1, pwm.servo2, pwm.servo3, pwm.servo4, pwm.servo5, pwm.servo6, pwm.servo7]);
+    let mut servos = ServoController::new([
+        pwm.servo1, pwm.servo2, pwm.servo3, pwm.servo4, pwm.servo5, pwm.servo6, pwm.servo7,
+    ]);
 
     print(b"Configured PWM\n");
 
@@ -223,7 +225,7 @@ fn main() -> ! {
 
         uwrite!(UsbSerialWriter, "Failsafe: {};", dsm_rx.is_in_failsafe()).unwrap();
 
-        uwrite!(UsbSerialWriter, "Channel mins:").ok();
+        uwrite!(UsbSerialWriter, " Channel mins:").ok();
         for ch in 0..7 {
             uwrite!(UsbSerialWriter, " {}", dsm_rx.get_channel_min(ch)).ok();
         }
