@@ -22,7 +22,7 @@ pub trait Accelerometer {
 
 // TODO: Magnetometer trait
 
-pub trait Orientation {
+pub trait AttitudeSensor {
     fn get_rotations(&mut self) -> (f64, f64, f64);
 }
 
@@ -46,7 +46,7 @@ impl<T: Gyro + Accelerometer> IMU<T> {
     }
 }
 
-impl<T: Gyro + Accelerometer> Orientation for IMU<T> {
+impl<T: Gyro + Accelerometer> AttitudeSensor for IMU<T> {
     fn get_rotations(&mut self) -> (f64, f64, f64) {
         self.filter.quat.euler_angles()
     }

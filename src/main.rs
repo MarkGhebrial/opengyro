@@ -19,6 +19,12 @@ use usb_serial::*;
 mod timer;
 use timer::*;
 
+mod state;
+use state::*;
+
+mod flight_modes;
+use flight_modes::*;
+
 use ufmt::*;
 use ufmt_float::*;
 

@@ -21,6 +21,7 @@ icm20948_driver = { git = "https://github.com/MarkGhebrial/icm20948_driver.git",
 ufmt_float = "0.2.0"
 nalgebra = { version = "0.31", default-features = false }
 ahrs = { version = "0.6.0", default-features = false }
+pid = "4.0.0"
 
 # Uncomment for the panic example.
 # panic-itm = "0.4.1"
